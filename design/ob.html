@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Order Book & Times & Sales</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      display: flex;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+    }
+    table {
+      border-collapse: collapse;
+      table-layout: fixed;
+      background-color: #000;
+      margin: 0;
+    }
+        /* En-tête OB */
+    #orderbook thead th{
+      background:#3a3a3a;
+      color:#fff;
+      font-weight:bold;
+      padding:2px 5px;
+      white-space:nowrap;
+      border-right:1px solid #000;
+    }
+    #orderbook thead th:last-child{ border-right:none; }
+
+    #orderbook td {
+      font-weight: bold;
+      padding: 1px 5px;
+      white-space: nowrap;
+      border-right: 1px solid #000;
+      color: #000; /* police noire */
+    }
+    #orderbook td:last-child { border-right: none; }
+    .col-left  { text-align: left;  width: 6ch; }
+    .col-right { text-align: right; width: 6ch; }
+    .green  { background-color: #57fe01; }
+    .rose   { background-color: #fd807f; }
+    .yellow { background-color: #fbfe01; }
+    .blue   { background-color: #03fef9; }
+    .grey   { background-color: #c1c1c1; }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Order Book -->
+
+    <table id="orderbook">
+      <thead>
+        <tr>
+          <th class="col-left">Maker</th>
+          <th class="col-right">Price</th>
+          <th class="col-right">Size</th>
+          <th class="col-left">Maker</th>
+          <th class="col-right">Price</th>
+          <th class="col-right">Size</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script>
+    (function() {
+      // Données Order Book (Bid & Ask)
+      const bidData = [
+        { exch: 'NSDQ', price: 10.41, size: 2 },{ exch: 'ARCA', price: 10.41, size: 1 },
+        { exch: 'BATS', price: 10.41, size: 1 },{ exch: 'BATY', price: 10.41, size: 1 },
+        { exch: 'EDGA', price: 10.41, size: 1 },{ exch: 'EDGX', price: 10.41, size: 1 },
+        { exch: 'IEXG', price: 10.41, size: 1 },{ exch: 'AMEX', price: 10.41, size: 1 },
+        { exch: 'NYSE', price: 10.41, size: 1 },{ exch: 'LULD', price: 9.48, size: 1 },
+        { exch: 'PHLX', price: 7.96, size: 2 },{ exch: 'MEMX', price: 6.00, size: 3 },
+        { exch: 'MIAX', price: 4.70, size: 1 },{ exch: 'BOSX', price: 0.00, size: 1 },
+        { exch: 'LTSE', price: 0.00, size: 1 }
+      ];
+      const askData = [
+        { exch: 'BATS', price: 10.91, size: 1 },{ exch: 'NSDQ', price: 10.94, size: 1 },
+        { exch: 'EDGX', price: 10.98, size: 1 },{ exch: 'ARCA', price: 10.99, size: 1 },
+        { exch: 'NYSE', price: 11.18, size: 1 },{ exch: 'BATY', price: 11.23, size: 1 },
+        { exch: 'EDGA', price: 11.23, size: 1 },{ exch: 'LULD', price: 11.59, size: 1 },
+        { exch: 'IEXG', price: 13.30, size: 1 },{ exch: 'AMEX', price: 13.30, size: 1 },
+        { exch: 'PHLX', price: 13.69, size: 2 },{ exch: 'MEMX', price: 14.75, size: 10 }
+      ];
+      const obody = document.querySelector('#orderbook tbody');
+      const maxRows = Math.max(bidData.length, askData.length);
+      for (let i = 0; i < maxRows; i++) {
+        const bid = bidData[i] || { exch:'', price:null, size:'' };
+        const ask = askData[i] || { exch:'', price:null, size:'' };
+        const tr = document.createElement('tr');
+        ['exch','price','size'].forEach((key, idx) => {
+          const td = document.createElement('td');
+          td.className = idx===0?'col-left':'col-right';
+          let text = '';
+          if (key==='price' && bid.price!=null) text = bid.price.toFixed(2);
+          if (key==='size' && bid.size!=='') text = bid.size;
+          if (key==='exch' && bid.exch) text = bid.exch;
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        ['exch','price','size'].forEach((key, idx) => {
+          const td = document.createElement('td');
+          td.className = idx===0?'col-left':'col-right';
+          let text = '';
+          if (key==='price' && ask.price!=null) text = ask.price.toFixed(2);
+          if (key==='size' && ask.size!=='') text = ask.size;
+          if (key==='exch' && ask.exch) text = ask.exch;
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        obody.appendChild(tr);
+      }
+      // Coloration OB dynamique
+      const obRows = Array.from(obody.children);
+      const bidPrices = obRows.map(r=>parseFloat(r.cells[1].innerText)).filter(n=>!isNaN(n));
+      const askPrices= obRows.map(r=>parseFloat(r.cells[4].innerText)).filter(n=>!isNaN(n));
+      const uniqBid = [...new Set(bidPrices)].sort((a,b)=>b-a);
+      const uniqAsk = [...new Set(askPrices)].sort((a,b)=>a-b);
+      const classes=['green','rose','yellow','blue'];
+      const bMap={}, aMap={}; uniqBid.forEach((p,i)=>bMap[p]=classes[i]||'grey');
+      uniqAsk.forEach((p,i)=>aMap[p]=classes[i]||'grey');
+      obRows.forEach(r=>{
+        const bp=parseFloat(r.cells[1].innerText), ap=parseFloat(r.cells[4].innerText);
+        const bc=bMap[bp]||'grey', ac=aMap[ap]||'grey';
+        r.cells[0].classList.add(bc);
+        r.cells[1].classList.add(bc);
+        r.cells[2].classList.add(bc);
+        r.cells[3].classList.add(ac);
+        r.cells[4].classList.add(ac);
+        r.cells[5].classList.add(ac);
+      });
+
+    })();
+  </script>
+</body>
+</html>
