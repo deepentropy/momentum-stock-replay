@@ -3,7 +3,7 @@ import { createChart, LineSeries, CandlestickSeries } from "lightweight-charts";
 import LoadingSpinner from "./LoadingSpinner";
 import { ta } from '@deepentropy/oakscriptjs';
 
-const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe }, ref) => {
+const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, previewData }, ref) => {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
   const seriesRefs = useRef({ bid: null, ask: null, mid: null, candlestick: null, ema9: null, ema20: null });
@@ -16,6 +16,7 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe }, 
   const aggregatedLineData = useRef({ bid: [], ask: [], mid: [] });
   const aggregatedCandleData = useRef([]);
   const emaData = useRef({ ema9: [], ema20: [] });
+  const isPreviewDisplayed = useRef(false);
 
   // Expose method to add markers
   useImperativeHandle(ref, () => ({
@@ -278,11 +279,68 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe }, 
         emaData.current = { ema9: [], ema20: [] };
         markersRef.current = [];
         markerSeriesRef.current = null;
+        isPreviewDisplayed.current = false;
       }
     }
 
     lastQuoteCountRef.current = currentQuoteCount;
   }, [sessionData.stats?.quoteCount]);
+
+  // Display preview data when available
+  useEffect(() => {
+    if (!previewData || !seriesRefs.current.bid) return;
+
+    // Don't show preview if playback has started
+    if (sessionData.stats?.quoteCount > 0) {
+      return;
+    }
+
+    // Clear existing data first (important for session changes)
+    console.log('🔄 Clearing chart for new preview');
+    seriesRefs.current.bid.setData([]);
+    seriesRefs.current.ask.setData([]);
+    seriesRefs.current.mid.setData([]);
+    seriesRefs.current.candlestick.setData([]);
+    seriesRefs.current.ema9.setData([]);
+    seriesRefs.current.ema20.setData([]);
+    allTicksData.current = [];
+    aggregatedLineData.current = { bid: [], ask: [], mid: [] };
+    aggregatedCandleData.current = [];
+    emaData.current = { ema9: [], ema20: [] };
+
+    console.log('📊 Displaying preview with', previewData.length, 'ticks');
+
+    // Convert preview data to tick format
+    const previewTicks = previewData.map(tick => ({
+      time: tick.adjustedTimestamp,
+      bid: parseFloat(tick.bid_price || tick.priceBid),
+      ask: parseFloat(tick.ask_price || tick.priceAsk),
+      mid: (parseFloat(tick.bid_price || tick.priceBid) + parseFloat(tick.ask_price || tick.priceAsk)) / 2
+    }));
+
+    // Aggregate data for preview
+    const previewLineData = aggregateLineData(previewTicks, timeframe);
+    const previewCandleData = aggregateCandleData(previewTicks, timeframe);
+
+    // Set data to chart
+    seriesRefs.current.bid.setData(previewLineData.bid);
+    seriesRefs.current.ask.setData(previewLineData.ask);
+    seriesRefs.current.mid.setData(previewLineData.mid);
+    seriesRefs.current.candlestick.setData(previewCandleData);
+
+    // Calculate and display EMAs for preview
+    const previewEMAs = calculateEMAs(previewLineData.mid);
+    seriesRefs.current.ema9.setData(previewEMAs.ema9);
+    seriesRefs.current.ema20.setData(previewEMAs.ema20);
+
+    // Fit content to show entire preview
+    if (chartInstance.current) {
+      chartInstance.current.timeScale().fitContent();
+    }
+
+    isPreviewDisplayed.current = true;
+    console.log('✅ Preview displayed');
+  }, [previewData, timeframe, sessionData.stats?.quoteCount]);
 
   const aggregateLineData = (ticks, tf) => {
     if (ticks.length === 0) return { bid: [], ask: [], mid: [] };
@@ -375,6 +433,22 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe }, 
 
   useEffect(() => {
     if (!sessionData.quote || !seriesRefs.current.bid) return;
+
+    // Clear preview on first real tick
+    if (isPreviewDisplayed.current) {
+      console.log('🔄 Clearing preview, starting live playback');
+      seriesRefs.current.bid.setData([]);
+      seriesRefs.current.ask.setData([]);
+      seriesRefs.current.mid.setData([]);
+      seriesRefs.current.candlestick.setData([]);
+      seriesRefs.current.ema9.setData([]);
+      seriesRefs.current.ema20.setData([]);
+      allTicksData.current = [];
+      aggregatedLineData.current = { bid: [], ask: [], mid: [] };
+      aggregatedCandleData.current = [];
+      emaData.current = { ema9: [], ema20: [] };
+      isPreviewDisplayed.current = false;
+    }
 
     const { t, bid, ask } = sessionData.quote;
     const mid = (bid + ask) / 2;

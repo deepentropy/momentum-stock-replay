@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ControlsBar from "./ControlsBar";
 import ChartArea from "./ChartArea";
 import SessionSearchModal from "./SessionSearchModal";
+import { api } from "../utils/api";
 
 export default function CenterPanel({ currentSession, sessionData, setSessionData, isLoading, onLoadingChange, onSelectSession, chartType, setChartType, timeframe, setTimeframe, onOpenSettings }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
 
   const chartTypeIcons = {
     line: (
@@ -32,6 +34,36 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
     60: '1m',
     300: '5m'
   };
+
+  // Load preview data when session is selected
+  useEffect(() => {
+    const loadPreviewData = async () => {
+      if (!currentSession) {
+        setPreviewData(null);
+        return;
+      }
+
+      // Clear preview if playback has started
+      if (sessionData.stats?.quoteCount > 0) {
+        setPreviewData(null);
+        return;
+      }
+
+      try {
+        console.log('📊 Loading preview data for:', currentSession.id);
+        onLoadingChange?.(true);
+        const data = await api.loadSessionData(currentSession.id);
+        setPreviewData(data);
+        console.log('✅ Preview data loaded:', data.length, 'ticks');
+      } catch (err) {
+        console.error('❌ Failed to load preview data:', err);
+      } finally {
+        onLoadingChange?.(false);
+      }
+    };
+
+    loadPreviewData();
+  }, [currentSession, sessionData.stats?.quoteCount, onLoadingChange]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-[#131722]">
@@ -181,6 +213,7 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
           isLoading={isLoading}
           chartType={chartType}
           timeframe={timeframe}
+          previewData={previewData}
         />
       </div>
 
