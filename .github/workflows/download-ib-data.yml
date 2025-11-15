@@ -46,7 +46,7 @@ jobs:
         run: |
           python scripts/download_historical_data.py
         env:
-          IB_HOST: ib-gateway
+          IB_HOST: localhost
           IB_PORT: 4002
           IB_CLIENT_ID: 1
 
