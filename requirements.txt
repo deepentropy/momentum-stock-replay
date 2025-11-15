@@ -1,5 +1,5 @@
 # IB Gateway API client
-ib_async==0.9.86
+ib_async==2.0.1
 
 # Data processing
 pandas>=2.0.0
