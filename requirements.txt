@@ -1,4 +1,7 @@
-# IB Gateway API client
+# Databento API client (recommended)
+databento>=0.40.0
+
+# IB Gateway API client (legacy - for backup)
 ib_async==2.0.1
 
 # Data processing

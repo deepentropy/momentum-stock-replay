@@ -6,7 +6,14 @@
       "Bash(nul)",
       "Bash(findstr:*)",
       "Bash(python compress.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:heshiming.github.io)",
+      "WebFetch(domain:databento.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:docs.github.com)"
     ],
     "deny": [],
     "ask": []

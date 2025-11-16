@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "updated": "2025-11-15",
+  "description": "Stock symbols for momentum replay - Replace with your 500 symbols",
+  "note": "This is a starter template. Add your full 500-symbol list below.",
+  "symbols": [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA",
+    "TSLA", "META", "BRK.B", "UNH", "JNJ",
+    "JPM", "V", "PG", "XOM", "HD",
+    "CVX", "MA", "ABBV", "PFE", "KO",
+    "LLY", "MRK", "AVGO", "COST", "WMT",
+    "PEP", "TMO", "CSCO", "ABT", "ACN"
+  ],
+  "categories": {
+    "tech": ["AAPL", "MSFT", "GOOGL", "NVDA", "META"],
+    "healthcare": ["UNH", "JNJ", "LLY", "ABBV", "PFE"],
+    "finance": ["JPM", "V", "MA", "BAC", "WFC"],
+    "energy": ["XOM", "CVX", "COP", "SLB"],
+    "consumer": ["WMT", "COST", "HD", "PG", "KO"]
+  }
+}

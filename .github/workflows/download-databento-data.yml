@@ -1,0 +1,59 @@
+name: Download Databento OHLCV Data
+
+on:
+  schedule:
+    # Run Monday-Friday at 2 PM UTC (9 AM EST, after previous day market close)
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:  # Allow manual triggering for testing
+
+jobs:
+  download-historical-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # Generous timeout (expected: 5-10 minutes)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install databento pandas numpy
+
+      - name: Download Databento historical data
+        env:
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+          DATABENTO_DATASET: XNAS.ITCH
+        run: |
+          python scripts/download_databento_data.py
+
+      - name: Compress data (optional)
+        run: |
+          if [ -f "tools/compress.py" ]; then
+            python tools/compress.py
+          else
+            echo "compress.py not found, skipping compression"
+          fi
+        continue-on-error: true
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Commit and push data
+        run: |
+          git add sessions/*.csv sessions/*.json sessions/*.bin.gz 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No new data to commit"
+          else
+            git commit -m "Add Databento OHLCV data for $(date +'%Y-%m-%d')"
+            git push
+          fi
