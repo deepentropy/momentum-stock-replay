@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { usePositionManager } from "../hooks/usePositionManager";
 import { useSettings } from "../contexts/SettingsContext";
 
 export default function OrderBookPanel({ sessionData, onAddMarker }) {
   const { quote, stats } = sessionData;
-  const level2Data = null; // L2 data not available - using top-of-book only
   const [positionSize, setPositionSize] = useState(100);
   const { positions, trades, summary, buy, sell, reset, updateCurrentPrice } = usePositionManager();
   const { settings } = useSettings();
@@ -21,8 +20,6 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     const quoteCount = stats?.quoteCount || 0;
     if (quoteCount === 0) {
       reset();
-      // Reset L2 snapshot cache when session resets
-      lastL2SnapshotRef.current = null;
     }
   }, [stats?.quoteCount, reset]);
 
@@ -114,208 +111,33 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     return publisherMap[publisherId] || `EX${publisherId}`;
   };
 
-  // Exchange distribution based on real market data (for fallback)
-  const exchanges = [
-    { name: 'NSDQ', weight: 28.03 },
-    { name: 'NYSE', weight: 23.86 },
-    { name: 'ARCA', weight: 14.91 },
-    { name: 'AMEX', weight: 1.19 },
-    { name: 'BATS', weight: 6.94 },
-    { name: 'BATY', weight: 1.37 },
-    { name: 'EDGX', weight: 5.67 },
-    { name: 'EDGA', weight: 0.91 },
-    { name: 'MEMX', weight: 8.95 },
-    { name: 'IEXG', weight: 5.57 },
-    { name: 'MIAX', weight: 2.58 },
-    { name: 'LTSE', weight: 0.02 },
-    { name: 'PHLX', weight: 0.00 },
-    { name: 'BOSX', weight: 0.00 },
-  ];
-
-  // Calculate cumulative weights for efficient selection
-  const cumulativeWeights = exchanges.reduce((acc, exchange, idx) => {
-    const prevWeight = idx > 0 ? acc[idx - 1] : 0;
-    acc.push(prevWeight + exchange.weight);
-    return acc;
-  }, []);
-  const totalWeight = cumulativeWeights[cumulativeWeights.length - 1];
-
-  // Function to select exchange based on weighted probability
-  const selectExchangeByWeight = () => {
-    const random = Math.random() * totalWeight;
-
-    for (let i = 0; i < cumulativeWeights.length; i++) {
-      if (random <= cumulativeWeights[i]) {
-        return exchanges[i].name;
-      }
-    }
-
-    return exchanges[0].name;
-  };
-
-  // Generate random size in multiples of 100
-  const generateSize = () => {
-    return Math.floor(Math.random() * 10 + 1) * 100; // 100 to 1000 by steps of 100
-  };
-
-  // Keep track of last L2 snapshot for forward-filling
-  const lastL2SnapshotRef = React.useRef(null);
-
-  // Filter Level 2 data by current timestamp with forward-fill
-  const getLevel2Snapshot = useCallback((currentTimestamp) => {
-    if (!level2Data || !currentTimestamp || level2Data.length === 0) {
-      return lastL2SnapshotRef.current; // Return last known snapshot if no L2 data
-    }
-
-    // currentTimestamp is in seconds (Unix timestamp), convert to milliseconds
-    const currentTimeMs = Math.floor(currentTimestamp * 1000);
-
-    // Find all L2 entries that match the current timestamp
-    // Use timestamp_ms field directly for better performance
-    const snapshot = level2Data.filter(entry => {
-      const entryTimeMs = entry.timestamp_ms;
-      // Match entries within a reasonable time window (100ms)
-      return Math.abs(entryTimeMs - currentTimeMs) <= 100;
-    });
-
-    if (snapshot.length === 0) {
-      // No exact match - forward fill from last snapshot
-      return lastL2SnapshotRef.current;
-    }
-
-    // Separate bids (entry_type === 0) and asks (entry_type === 1)
-    const bids = snapshot
-      .filter(entry => entry.entry_type === 0)
-      .map(entry => ({
-        maker: entry.exchange,
-        price: entry.price,
-        size: entry.size
-      }))
-      .sort((a, b) => b.price - a.price); // Sort bids by price descending (best bid first)
-
-    const asks = snapshot
-      .filter(entry => entry.entry_type === 1)
-      .map(entry => ({
-        maker: entry.exchange,
-        price: entry.price,
-        size: entry.size
-      }))
-      .sort((a, b) => a.price - b.price); // Sort asks by price ascending (best ask first)
-
-    const result = { bids, asks };
-
-    // Store this snapshot for forward-filling
-    lastL2SnapshotRef.current = result;
-
-    return result;
-  }, [level2Data]);
-
-  // Generate order book levels using real exchange data or fallback
+  // Use real multi-exchange order book data from V3 format
   const orderBookData = useMemo(() => {
-    if (!quote) {
+    if (!quote || !quote.exchanges || quote.exchanges.length === 0) {
       return { bids: [], asks: [] };
     }
 
     // V3 format: Use real multi-exchange data from quote.exchanges
-    if (quote.exchanges && quote.exchanges.length > 0) {
-      const bids = quote.exchanges
-        .filter(ex => ex.bid_price > 0)
-        .map(ex => ({
-          maker: getExchangeName(ex.publisher_id),
-          price: parseFloat(ex.bid_price),
-          size: parseFloat(ex.bid_size)
-        }))
-        .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
+    const bids = quote.exchanges
+      .filter(ex => ex.bid_price > 0)
+      .map(ex => ({
+        maker: getExchangeName(ex.publisher_id),
+        price: parseFloat(ex.bid_price),
+        size: parseFloat(ex.bid_size)
+      }))
+      .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
 
-      const asks = quote.exchanges
-        .filter(ex => ex.ask_price > 0)
-        .map(ex => ({
-          maker: getExchangeName(ex.publisher_id),
-          price: parseFloat(ex.ask_price),
-          size: parseFloat(ex.ask_size)
-        }))
-        .sort((a, b) => a.price - b.price); // Sort by price ascending (best ask first)
-
-      return { bids, asks };
-    }
-
-    // Try to get Level 2 snapshot if available (legacy)
-    const l2Snapshot = getLevel2Snapshot(quote.t);
-
-    if (l2Snapshot && (l2Snapshot.bids.length > 0 || l2Snapshot.asks.length > 0)) {
-      // Use real Level 2 data - don't pad or generate extra levels
-      // Just return what we have from the L2 data
-      return {
-        bids: l2Snapshot.bids,
-        asks: l2Snapshot.asks
-      };
-    }
-
-    // Fallback to generated order book
-    const depth = settings.orderBookDepth;
-    const bids = [];
-    const asks = [];
-
-    // Track used exchanges for each side independently
-    const usedBidExchanges = new Set();
-    const usedAskExchanges = new Set();
-
-    // Generate bids - first line uses CSV data, others are generated
-    for (let i = 0; i < depth; i++) {
-      let bidExchange;
-      let attempts = 0;
-      do {
-        bidExchange = selectExchangeByWeight();
-        attempts++;
-        if (attempts > 100) {
-          bidExchange = `MKT${i}`;
-          break;
-        }
-      } while (usedBidExchanges.has(bidExchange));
-
-      usedBidExchanges.add(bidExchange);
-
-      // First line (i=0) uses CSV bid price and size
-      // Other lines use decreasing prices with generated sizes
-      const bidPrice = i === 0 ? quote.bid : quote.bid - (i * 0.01);
-      const bidSize = i === 0 ? (quote.bidSize || 100) : generateSize();
-
-      bids.push({
-        maker: bidExchange,
-        price: bidPrice,
-        size: bidSize
-      });
-    }
-
-    // Generate asks - first line uses CSV data, others are generated
-    for (let i = 0; i < depth; i++) {
-      let askExchange;
-      let attempts = 0;
-      do {
-        askExchange = selectExchangeByWeight();
-        attempts++;
-        if (attempts > 100) {
-          askExchange = `MKT${i}`;
-          break;
-        }
-      } while (usedAskExchanges.has(askExchange));
-
-      usedAskExchanges.add(askExchange);
-
-      // First line (i=0) uses CSV ask price and size
-      // Other lines use increasing prices with generated sizes
-      const askPrice = i === 0 ? quote.ask : quote.ask + (i * 0.01);
-      const askSize = i === 0 ? (quote.askSize || 100) : generateSize();
-
-      asks.push({
-        maker: askExchange,
-        price: askPrice,
-        size: askSize
-      });
-    }
+    const asks = quote.exchanges
+      .filter(ex => ex.ask_price > 0)
+      .map(ex => ({
+        maker: getExchangeName(ex.publisher_id),
+        price: parseFloat(ex.ask_price),
+        size: parseFloat(ex.ask_size)
+      }))
+      .sort((a, b) => a.price - b.price); // Sort by price ascending (best ask first)
 
     return { bids, asks };
-  }, [quote, settings.orderBookDepth, getLevel2Snapshot]);
+  }, [quote]);
 
   // Assign colors based on unique price levels
   const getPriceLevelColors = () => {
@@ -412,8 +234,6 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
             })}
           </tbody>
         </table>
-
-        {/* Note: Order book depth levels are simulated based on top-of-book data */}
       </div>
 
       {/* Position Summary - Redesigned */}
