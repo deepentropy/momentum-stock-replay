@@ -9,7 +9,7 @@ import json
 from .config import Config
 from .models import PipelineResult
 from .fetchers import FundamentalsFetcher, DatabentoFetcher
-from .analyzers import RunUpAnalyzer
+from .analyzers import RunUpAnalyzer, RvolRocAnalyzer
 from .compressor import BinaryCompressor, NBBOBinaryCompressor
 from .resampler import NBBOResampler
 from .summarizer import SummaryGenerator
@@ -63,20 +63,26 @@ class MomentumPipeline:
             # Step 2: Fetch OHLCV and analyze run-ups
             self._step_ohlcv_analysis()
 
-            # Step 3: Fetch MBP-1 data (conditional)
+            # Step 3: Fetch 1s OHLCV and filter by RVOL/ROC (conditional)
             if self.result.runup_passed_count > 0:
+                self._step_rvol_roc_filter()
+            else:
+                self.result.add_log('RVOL/ROC Filter', 'skipped', 'No stocks passed run-up filter')
+
+            # Step 4: Fetch MBP-1 data (conditional)
+            if self.result.rvol_roc_passed_count > 0:
                 self._step_mbp1_data()
             else:
-                self.result.add_log('Fetch MBP-1', 'skipped', 'No stocks passed filter')
+                self.result.add_log('Fetch MBP-1', 'skipped', 'No stocks passed filters')
 
-            # Step 4: Compress data (conditional)
+            # Step 5: Compress data (conditional)
             if not self.skip_compression and self.result.mbp1_files_count > 0:
                 self._step_compression()
             else:
                 reason = 'Skipped by flag' if self.skip_compression else 'No MBP-1 data'
                 self.result.add_log('Compress Data', 'skipped', reason)
 
-            # Step 5: Generate summary
+            # Step 6: Generate summary
             self._step_summary()
 
             # Mark completion
@@ -109,7 +115,7 @@ class MomentumPipeline:
     def _step_fundamentals(self):
         """Step 1: Fetch and filter fundamentals."""
         print(f"\n{'='*80}")
-        print(f"STEP 1/5: Fetch & Filter Fundamentals")
+        print(f"STEP 1/6: Fetch & Filter Fundamentals")
         print(f"{'='*80}\n")
 
         try:
@@ -140,7 +146,7 @@ class MomentumPipeline:
     def _step_ohlcv_analysis(self):
         """Step 2: Fetch OHLCV and analyze run-ups."""
         print(f"\n{'='*80}")
-        print(f"STEP 2/5: Fetch OHLCV & Analyze Run-Ups")
+        print(f"STEP 2/6: Fetch OHLCV & Analyze Run-Ups")
         print(f"{'='*80}\n")
 
         try:
@@ -169,10 +175,41 @@ class MomentumPipeline:
             self.result.add_error('Fetch OHLCV & Analyze', str(e))
             raise
 
-    def _step_mbp1_data(self):
-        """Step 3: Fetch MBP-1 tick data from multiple exchanges."""
+    def _step_rvol_roc_filter(self):
+        """Step 3: Fetch 1-second OHLCV and filter by RVOL/ROC."""
         print(f"\n{'='*80}")
-        print(f"STEP 3/5: Fetch MBP-1 Tick Data (Multi-Exchange)")
+        print(f"STEP 3/6: Fetch 1s OHLCV & Filter by RVOL/ROC")
+        print(f"{'='*80}\n")
+
+        try:
+            self.result.add_log('RVOL/ROC Filter', 'started')
+
+            # Get symbols that passed run-up filter
+            symbols = [r.symbol for r in self.result.runup_results]
+
+            # Fetch 1-second OHLCV data
+            fetcher = DatabentoFetcher()
+            df_1s = fetcher.fetch_ohlcv_1s_batch(symbols, self.date)
+
+            # Analyze with RVOL/ROC
+            analyzer = RvolRocAnalyzer()
+            filtered_results = analyzer.analyze_ohlcv_1s_data(df_1s, self.result.runup_results)
+
+            # Update pipeline result
+            self.result.runup_results = filtered_results
+            self.result.rvol_roc_passed_count = len(filtered_results)
+
+            self.result.add_log('RVOL/ROC Filter', 'success',
+                              f'{self.result.rvol_roc_passed_count} stocks passed filter')
+
+        except Exception as e:
+            self.result.add_error('RVOL/ROC Filter', str(e))
+            raise
+
+    def _step_mbp1_data(self):
+        """Step 4: Fetch MBP-1 tick data from multiple exchanges."""
+        print(f"\n{'='*80}")
+        print(f"STEP 4/6: Fetch MBP-1 Tick Data (Multi-Exchange)")
         print(f"{'='*80}\n")
 
         try:
@@ -201,9 +238,9 @@ class MomentumPipeline:
             # Don't raise - MBP-1 fetch is optional
 
     def _step_compression(self):
-        """Step 4: Resample to NBBO and compress to binary format."""
+        """Step 5: Resample to NBBO and compress to binary format."""
         print(f"\n{'='*80}")
-        print(f"STEP 4/5: Resample NBBO & Compress to Binary Format")
+        print(f"STEP 5/6: Resample NBBO & Compress to Binary Format")
         print(f"{'='*80}\n")
 
         try:
@@ -241,9 +278,9 @@ class MomentumPipeline:
             # Don't raise - compression is optional
 
     def _step_summary(self):
-        """Step 5: Generate summary."""
+        """Step 6: Generate summary."""
         print(f"\n{'='*80}")
-        print(f"STEP 5/5: Generate Summary")
+        print(f"STEP 6/6: Generate Summary")
         print(f"{'='*80}\n")
 
         try:
@@ -302,6 +339,7 @@ class MomentumPipeline:
         print(f"  • Fundamentals: {self.result.fundamentals_count} -> {self.result.filtered_count} filtered")
         print(f"  • OHLCV symbols: {self.result.ohlcv_symbols_count}")
         print(f"  • Run-up passed: {self.result.runup_passed_count} (>{Config.RUNUP_THRESHOLD_PCT}%)")
+        print(f"  • RVOL/ROC passed: {self.result.rvol_roc_passed_count} (RVOL>{Config.RVOL_THRESHOLD}, ROC>{Config.ROC_THRESHOLD}%)")
         print(f"  • MBP-1 files: {self.result.mbp1_files_count}")
         print(f"  • Compressed: {self.result.compressed_files_count}")
 

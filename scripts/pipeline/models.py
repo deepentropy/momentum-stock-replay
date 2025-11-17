@@ -29,6 +29,12 @@ class RunUpResult:
     day_close: Optional[float] = None
     volume: Optional[int] = None
 
+    # RVOL/ROC filtering results
+    max_rvol: Optional[float] = None
+    max_roc: Optional[float] = None
+    rvol_roc_timestamp: Optional[str] = None
+    passed_rvol_roc: bool = False
+
 
 @dataclass
 class CompressionStats:
@@ -56,6 +62,7 @@ class PipelineResult:
     filtered_count: int = 0
     ohlcv_symbols_count: int = 0
     runup_passed_count: int = 0
+    rvol_roc_passed_count: int = 0
     mbp1_files_count: int = 0
     compressed_files_count: int = 0
 
@@ -98,6 +105,7 @@ class PipelineResult:
             'filtered_count': self.filtered_count,
             'ohlcv_symbols_count': self.ohlcv_symbols_count,
             'runup_passed_count': self.runup_passed_count,
+            'rvol_roc_passed_count': self.rvol_roc_passed_count,
             'mbp1_files_count': self.mbp1_files_count,
             'compressed_files_count': self.compressed_files_count,
             'runup_results': [
@@ -105,7 +113,10 @@ class PipelineResult:
                     'symbol': r.symbol,
                     'premarket_open': r.premarket_open,
                     'day_high': r.day_high,
-                    'runup_pct': r.runup_pct
+                    'runup_pct': r.runup_pct,
+                    'max_rvol': r.max_rvol,
+                    'max_roc': r.max_roc,
+                    'passed_rvol_roc': r.passed_rvol_roc
                 }
                 for r in self.runup_results
             ],

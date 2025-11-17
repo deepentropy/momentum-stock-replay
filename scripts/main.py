@@ -24,10 +24,11 @@ Environment variables needed:
 
 Pipeline steps:
 1. Fetch and filter fundamentals from GitHub
-2. Download 1-hour OHLCV data and analyze run-ups
-3. Download MBP-1 tick data for stocks with >30% run-up
-4. Compress MBP-1 data to binary format
-5. Generate comprehensive summary
+2. Download 1-hour OHLCV data and analyze run-ups (>30% threshold)
+3. Download 1-second OHLCV data and filter by RVOL/ROC (>10 threshold)
+4. Download MBP-1 tick data for stocks passing all filters
+5. Compress MBP-1 data to binary format (V3: NBBO + exchanges)
+6. Generate comprehensive summary
 
 Output:
 - sessions/*.bin.gz - Compressed binary data (committed to git)

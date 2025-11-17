@@ -27,6 +27,13 @@ class Config:
     # Run-up Analysis
     RUNUP_THRESHOLD_PCT = 30.0  # 30% run-up threshold
 
+    # RVOL/ROC Filtering (on 10-second resampled data)
+    RVOL_THRESHOLD = 10.0        # Minimum relative volume
+    ROC_THRESHOLD = 10.0         # Minimum rate of change (%)
+    RVOL_LENGTH = 10             # Lookback period for RVOL
+    ROC_LENGTH = 9               # Lookback period for ROC
+    OHLCV_RESAMPLE_INTERVAL = '10s'  # Resample 1s bars to 10s
+
     # Databento Settings
     # Single dataset (legacy)
     DATABENTO_DATASET = 'XNAS.ITCH'  # NASDAQ only

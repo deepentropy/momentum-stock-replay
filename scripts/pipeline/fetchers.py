@@ -148,6 +148,39 @@ class DatabentoFetcher:
         print(f"[SUCCESS] Received {len(df):,} bars")
         return df
 
+    def fetch_ohlcv_1s_batch(
+        self,
+        symbols: List[str],
+        date: str,
+        dataset: str = Config.DATABENTO_DATASET
+    ) -> pd.DataFrame:
+        """Fetch 1-second OHLCV data for multiple symbols in batch."""
+        print(f"\n{'='*80}")
+        print("Fetching 1-Second OHLCV Data (Batch)")
+        print(f"{'='*80}\n")
+        print(f"Symbols: {len(symbols)}")
+        print(f"Date: {date}")
+        print(f"Dataset: {dataset}")
+
+        # Calculate date range
+        start_date = datetime.strptime(date, '%Y-%m-%d')
+        end_date = start_date + timedelta(days=1)
+        end_date_str = end_date.strftime('%Y-%m-%d')
+
+        # Fetch data
+        data = self.client.timeseries.get_range(
+            dataset=dataset,
+            symbols=symbols,
+            schema='ohlcv-1s',
+            start=date,
+            end=end_date_str,
+            stype_in='raw_symbol',
+        )
+
+        df = data.to_df()
+        print(f"[SUCCESS] Received {len(df):,} bars ({len(df['symbol'].unique()) if 'symbol' in df.columns else 0} symbols)")
+        return df
+
     def fetch_mbp1_batch(
         self,
         symbols: List[str],
