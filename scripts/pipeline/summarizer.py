@@ -3,7 +3,7 @@ Summary generation for pipeline execution.
 """
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any
 
 from .config import Config
@@ -25,7 +25,7 @@ class SummaryGenerator:
 
         summary = {
             'date': result.date,
-            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'generated_at': datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
             'execution': {
                 'started_at': result.started_at,
                 'completed_at': result.completed_at,

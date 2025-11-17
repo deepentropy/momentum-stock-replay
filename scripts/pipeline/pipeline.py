@@ -1,7 +1,7 @@
 """
 Main pipeline orchestrator.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Optional
 import json
@@ -10,7 +10,8 @@ from .config import Config
 from .models import PipelineResult
 from .fetchers import FundamentalsFetcher, DatabentoFetcher
 from .analyzers import RunUpAnalyzer
-from .compressor import BinaryCompressor
+from .compressor import BinaryCompressor, NBBOBinaryCompressor
+from .resampler import NBBOResampler
 from .summarizer import SummaryGenerator
 
 
@@ -36,7 +37,7 @@ class MomentumPipeline:
         # Initialize result tracker
         self.result = PipelineResult(
             date=self.date,
-            started_at=datetime.utcnow().isoformat() + 'Z'
+            started_at=datetime.now(UTC).isoformat().replace('+00:00', 'Z')
         )
 
         # Setup
@@ -79,7 +80,7 @@ class MomentumPipeline:
             self._step_summary()
 
             # Mark completion
-            self.result.completed_at = datetime.utcnow().isoformat() + 'Z'
+            self.result.completed_at = datetime.now(UTC).isoformat().replace('+00:00', 'Z')
 
             # Final report
             self._print_final_report()
@@ -200,17 +201,31 @@ class MomentumPipeline:
             # Don't raise - MBP-1 fetch is optional
 
     def _step_compression(self):
-        """Step 4: Compress MBP-1 data to binary format."""
+        """Step 4: Resample to NBBO and compress to binary format."""
         print(f"\n{'='*80}")
-        print(f"STEP 4/5: Compress to Binary Format")
+        print(f"STEP 4/5: Resample NBBO & Compress to Binary Format")
         print(f"{'='*80}\n")
 
         try:
+            # Step 4a: Resample MBP-1 to NBBO
+            self.result.add_log('Resample NBBO', 'started')
+
+            resampler = NBBOResampler()
+            resample_metadata = resampler.resample_directory(
+                Config.DATA_DIR_MBP1,
+                self.date,
+                Config.DATA_DIR_NBBO
+            )
+
+            self.result.add_log('Resample NBBO', 'success',
+                              f'{len(resample_metadata)} files resampled')
+
+            # Step 4b: Compress NBBO to binary
             self.result.add_log('Compress Data', 'started')
 
-            compressor = BinaryCompressor()
+            compressor = NBBOBinaryCompressor()
             compression_stats = compressor.compress_directory(
-                Config.DATA_DIR_MBP1,
+                Config.DATA_DIR_NBBO,
                 self.date,
                 Config.SESSIONS_DIR
             )
@@ -219,7 +234,7 @@ class MomentumPipeline:
             self.result.compressed_files_count = len(compression_stats)
 
             self.result.add_log('Compress Data', 'success',
-                              f'{self.result.compressed_files_count} files compressed')
+                              f'{self.result.compressed_files_count} files compressed (V3 format)')
 
         except Exception as e:
             self.result.add_error('Compress Data', str(e))

@@ -3,7 +3,8 @@ import { usePositionManager } from "../hooks/usePositionManager";
 import { useSettings } from "../contexts/SettingsContext";
 
 export default function OrderBookPanel({ sessionData, onAddMarker }) {
-  const { quote, stats, level2Data } = sessionData;
+  const { quote, stats } = sessionData;
+  const level2Data = null; // L2 data not available - using top-of-book only
   const [positionSize, setPositionSize] = useState(100);
   const { positions, trades, summary, buy, sell, reset, updateCurrentPrice } = usePositionManager();
   const { settings } = useSettings();
@@ -97,7 +98,23 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [quote, positionSize, positions, settings]);
 
-  // Exchange distribution based on real market data
+  // Map publisher IDs to exchange names
+  const getExchangeName = (publisherId) => {
+    // Databento publisher IDs - common ones
+    const publisherMap = {
+      1: 'NSDQ',   // XNAS
+      2: 'NYSE',   // XNYS
+      3: 'ARCA',   // ARCX
+      4: 'BATS',   // BATS/BZX
+      5: 'IEXG',   // IEX
+      6: 'BOSX',   // XBOS (NASDAQ BX)
+      7: 'PHLX',   // XPSX (NASDAQ PSX)
+      // Add more as needed based on actual data
+    };
+    return publisherMap[publisherId] || `EX${publisherId}`;
+  };
+
+  // Exchange distribution based on real market data (for fallback)
   const exchanges = [
     { name: 'NSDQ', weight: 28.03 },
     { name: 'NYSE', weight: 23.86 },
@@ -193,13 +210,36 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     return result;
   }, [level2Data]);
 
-  // Generate order book levels using Level 2 data or configured depth
+  // Generate order book levels using real exchange data or fallback
   const orderBookData = useMemo(() => {
     if (!quote) {
       return { bids: [], asks: [] };
     }
 
-    // Try to get Level 2 snapshot if available
+    // V3 format: Use real multi-exchange data from quote.exchanges
+    if (quote.exchanges && quote.exchanges.length > 0) {
+      const bids = quote.exchanges
+        .filter(ex => ex.bid_price > 0)
+        .map(ex => ({
+          maker: getExchangeName(ex.publisher_id),
+          price: parseFloat(ex.bid_price),
+          size: parseFloat(ex.bid_size)
+        }))
+        .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
+
+      const asks = quote.exchanges
+        .filter(ex => ex.ask_price > 0)
+        .map(ex => ({
+          maker: getExchangeName(ex.publisher_id),
+          price: parseFloat(ex.ask_price),
+          size: parseFloat(ex.ask_size)
+        }))
+        .sort((a, b) => a.price - b.price); // Sort by price ascending (best ask first)
+
+      return { bids, asks };
+    }
+
+    // Try to get Level 2 snapshot if available (legacy)
     const l2Snapshot = getLevel2Snapshot(quote.t);
 
     if (l2Snapshot && (l2Snapshot.bids.length > 0 || l2Snapshot.asks.length > 0)) {
@@ -314,12 +354,8 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
 
   const midPrice = quote ? (quote.bid + quote.ask) / 2 : 0;
 
-  // Check if we're using real L2 data
-  const isUsingRealL2Data = useMemo(() => {
-    if (!quote || !level2Data) return false;
-    const l2Snapshot = getLevel2Snapshot(quote.t);
-    return l2Snapshot && (l2Snapshot.bids.length > 0 || l2Snapshot.asks.length > 0);
-  }, [quote, level2Data, getLevel2Snapshot]);
+  // Check if we're using real exchange data (V3 format)
+  const isUsingRealL2Data = quote?.exchanges && quote.exchanges.length > 0;
 
   return (
     <div className="w-[400px] flex flex-col bg-[#131722] border-l border-[#2A2E39] h-full overflow-hidden">
@@ -377,14 +413,7 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
           </tbody>
         </table>
 
-        {/* L2 Data Warning */}
-        {quote && !isUsingRealL2Data && (
-          <div className="mt-2 text-center">
-            <span className="text-[10px] text-[#787B86] italic opacity-70">
-              ⚠ Levels are generated (no L2 data available)
-            </span>
-          </div>
-        )}
+        {/* Note: Order book depth levels are simulated based on top-of-book data */}
       </div>
 
       {/* Position Summary - Redesigned */}

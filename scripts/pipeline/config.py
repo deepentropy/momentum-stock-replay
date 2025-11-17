@@ -49,6 +49,9 @@ class Config:
     TIME_UNIT = 1_000_000   # microseconds
     GZIP_LEVEL = 9
 
+    # NBBO Resampling Settings
+    NBBO_RESAMPLE_INTERVAL_MS = 100  # 100ms intervals for NBBO sampling
+
     # Directory Structure
     # Pipeline is now in scripts/pipeline/, so go up two levels to get to project root
     BASE_DIR = Path(__file__).parent.parent.parent
@@ -56,14 +59,17 @@ class Config:
     DATA_DIR_FUNDAMENTALS = TEMP_DIR / "fundamentals_data"
     DATA_DIR_OHLCV = TEMP_DIR / "databento_data"
     DATA_DIR_MBP1 = TEMP_DIR / "databento_mbp1_data"
+    DATA_DIR_NBBO = TEMP_DIR / "databento_nbbo_data"  # Resampled NBBO data
     SESSIONS_DIR = BASE_DIR / "sessions"  # Output: committed to git
     SUMMARY_DIR = BASE_DIR / "summary"    # Output: committed to git
 
     # Binary Format
     BINARY_MAGIC = b'TICK'
-    BINARY_VERSION = 2  # Version 2 includes all MBP-1 columns
-    HEADER_SIZE = 18  # bytes (4 + 2 + 4 + 8)
-    ROW_SIZE = 64     # bytes (all MBP-1 columns)
+    BINARY_VERSION_V2 = 2  # Version 2: all MBP-1 columns (legacy)
+    BINARY_VERSION_V3 = 3  # Version 3: NBBO + exchange snapshots (new)
+    BINARY_VERSION = 3     # Current version
+    HEADER_SIZE_V2 = 18    # bytes (4 + 2 + 4 + 8) for V2
+    ROW_SIZE_V2 = 64       # bytes (all MBP-1 columns) for V2
 
     @classmethod
     def validate(cls) -> bool:
@@ -91,6 +97,7 @@ class Config:
             cls.DATA_DIR_FUNDAMENTALS,
             cls.DATA_DIR_OHLCV,
             cls.DATA_DIR_MBP1,
+            cls.DATA_DIR_NBBO,
             cls.SESSIONS_DIR,
             cls.SUMMARY_DIR
         ]:

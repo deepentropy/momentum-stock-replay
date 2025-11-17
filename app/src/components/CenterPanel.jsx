@@ -53,8 +53,23 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
         console.log('📊 Loading preview data for:', currentSession.id);
         onLoadingChange?.(true);
         const data = await api.loadSessionData(currentSession.id);
-        setPreviewData(data);
-        console.log('✅ Preview data loaded:', data.length, 'ticks');
+
+        // Limit preview to max 10,000 ticks to prevent memory issues
+        const MAX_PREVIEW_TICKS = 10000;
+        let previewSample = data;
+
+        if (data.length > MAX_PREVIEW_TICKS) {
+          console.log(`⚠️ Large dataset (${data.length.toLocaleString()} ticks), sampling every ${Math.ceil(data.length / MAX_PREVIEW_TICKS)}th tick for preview`);
+          const step = Math.ceil(data.length / MAX_PREVIEW_TICKS);
+          previewSample = [];
+          for (let i = 0; i < data.length; i += step) {
+            previewSample.push(data[i]);
+          }
+          console.log(`✅ Preview sample: ${previewSample.length.toLocaleString()} ticks`);
+        }
+
+        setPreviewData(previewSample);
+        console.log('✅ Preview data loaded:', previewSample.length, 'ticks (full session:', data.length.toLocaleString(), 'ticks)');
       } catch (err) {
         console.error('❌ Failed to load preview data:', err);
       } finally {

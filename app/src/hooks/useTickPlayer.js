@@ -34,7 +34,6 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     const currentIndex = currentIndexRef.current;
 
     if (currentIndex >= ticks.length) {
-      console.log('✅ Playback completed');
       stopPlayback();
       onEnd?.();
       return;
@@ -54,6 +53,11 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     if (nextTick && currentTick.adjustedTimestamp && nextTick.adjustedTimestamp) {
       const timeDiff = (nextTick.adjustedTimestamp - currentTick.adjustedTimestamp) * 1000; // Convert to ms
       delay = timeDiff / speedRef.current;
+
+      // Cap maximum delay at 1000ms to prevent frozen playback
+      if (delay > 1000) {
+        delay = 1000;
+      }
     } else {
       delay = 10 / speedRef.current; // Default 10ms if no timestamp
     }
@@ -72,8 +76,6 @@ export function useTickPlayer(onTick, onInit, onEnd) {
 
   const loadAndPlay = useCallback(async (sessionId, tickData) => {
     stopPlayback();
-
-    console.log('📊 Loading session:', sessionId);
 
     ticksRef.current = tickData;
     currentIndexRef.current = 0;

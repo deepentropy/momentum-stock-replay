@@ -65,33 +65,25 @@ export const api = {
     const pako = await import('pako');
     const decompressed = pako.inflate(new Uint8Array(arrayBuffer));
 
-    // Parse binary data
-    const parsedData = parseBinaryData(decompressed);
+    // Detect version and parse accordingly
+    const dataView = new DataView(decompressed.buffer);
+    const version = dataView.getUint16(4, true); // Version is at offset 4, 2 bytes
 
-    // Try to load Level 2 data with -l2.bin.gz suffix
-    let level2Data = null;
-    try {
-      const l2Url = `${GITHUB_RAW_BASE}/${sessionId}-l2.bin.gz`;
-      const l2Response = await fetch(l2Url);
-      if (l2Response.ok) {
-        const l2ArrayBuffer = await l2Response.arrayBuffer();
-        const l2Decompressed = pako.inflate(new Uint8Array(l2ArrayBuffer));
-        level2Data = parseBinaryLevel2Data(l2Decompressed);
-        console.log(`✅ Loaded ${level2Data.length} Level 2 entries for ${sessionId}`);
-      }
-    } catch (error) {
-      console.log(`ℹ️ No Level 2 data available for ${sessionId}: ${error.message}`);
+    console.log(`📦 Detected binary format version: ${version}`);
+
+    let parsedData;
+    if (version === 3) {
+      // Version 3: NBBO format with exchange snapshots
+      parsedData = parseBinaryDataV3(decompressed);
+      // V3 already has proper timestamps, no preprocessing needed
+      return parsedData;
+    } else {
+      // Version 2: Legacy MBP-1 format
+      parsedData = parseBinaryDataV2(decompressed);
+      // Preprocess to add artificial milliseconds for V2
+      const processedData = preprocessTimestamps(parsedData);
+      return processedData;
     }
-
-    // Preprocess to add artificial milliseconds
-    const processedData = preprocessTimestamps(parsedData);
-
-    // Attach level2 data to the result if available
-    if (level2Data) {
-      processedData.level2Data = level2Data;
-    }
-
-    return processedData;
   },
 
   // New method to get session metadata without loading all data
@@ -125,21 +117,21 @@ export const api = {
   }
 };
 
-function parseBinaryData(buffer) {
-  // New binary format from compress.py:
-  // Header (17 bytes): Magic number (4 bytes) + Version (1 byte) + Num rows (4 bytes) + Initial timestamp (8 bytes)
-  // Data rows (24 bytes each): int64 delta_time_us + int32 price_bid + int32 price_ask + int32 size_bid + int32 size_ask
+function parseBinaryDataV2(buffer) {
+  // New binary format from compress.py (Databento MBP-1):
+  // Header (18 bytes): Magic number (4 bytes) + Version (2 bytes) + Num rows (4 bytes) + Initial timestamp (8 bytes)
+  // Data rows (64 bytes each): Full MBP-1 data with bid/ask prices, sizes, counts, and metadata
 
   const dataView = new DataView(buffer.buffer);
   let offset = 0;
 
-  // Read header (17 bytes)
+  // Read header (18 bytes)
   const magicBytes = new Uint8Array(buffer.buffer, offset, 4);
   const magic = new TextDecoder().decode(magicBytes);
   offset += 4;
 
-  const version = dataView.getUint8(offset);
-  offset += 1;
+  const version = dataView.getUint16(offset, true); // 2 bytes now
+  offset += 2;
 
   const numRows = dataView.getUint32(offset, true); // little-endian
   offset += 4;
@@ -154,20 +146,41 @@ function parseBinaryData(buffer) {
     throw new Error(`Invalid binary format: expected magic "TICK", got "${magic}"`);
   }
 
-  // Parse data rows (24 bytes each)
+  // Verify version
+  if (version !== 2) {
+    console.warn(`⚠️ Unexpected version ${version}, expected 2. Attempting to parse anyway...`);
+  }
+
+  // Parse data rows (64 bytes each)
+  // Format: qBHIBBBqiHiIiiiiII
+  // ts_event delta (8) + rtype (1) + publisher_id (2) + instrument_id (4) + action (1) + side (1) + depth (1) +
+  // price (8) + size (4) + flags (2) + ts_in_delta (4) + sequence (4) +
+  // bid_px_00 (4) + ask_px_00 (4) + bid_sz_00 (4) + ask_sz_00 (4) + bid_ct_00 (4) + ask_ct_00 (4)
   const data = [];
-  const rowSize = 24; // bytes per row
+  const rowSize = 64; // bytes per row
 
   for (let i = 0; i < numRows; i++) {
     const rowOffset = offset + (i * rowSize);
 
     // Read row data (little-endian)
-    // int64 delta_time_us (8 bytes) + int32 price_bid (4) + int32 price_ask (4) + int32 size_bid (4) + int32 size_ask (4)
-    const deltaTimeUs = dataView.getBigInt64(rowOffset, true);
-    const priceBidScaled = dataView.getInt32(rowOffset + 8, true);
-    const priceAskScaled = dataView.getInt32(rowOffset + 12, true);
-    const sizeBidScaled = dataView.getInt32(rowOffset + 16, true);
-    const sizeAskScaled = dataView.getInt32(rowOffset + 20, true);
+    const deltaTimeUs = dataView.getBigInt64(rowOffset, true);           // 8 bytes
+    const rtype = dataView.getUint8(rowOffset + 8);                      // 1 byte
+    const publisherId = dataView.getUint16(rowOffset + 9, true);         // 2 bytes
+    const instrumentId = dataView.getUint32(rowOffset + 11, true);       // 4 bytes
+    const action = dataView.getUint8(rowOffset + 15);                    // 1 byte (ASCII)
+    const side = dataView.getUint8(rowOffset + 16);                      // 1 byte (ASCII)
+    const depth = dataView.getUint8(rowOffset + 17);                     // 1 byte
+    const priceScaled = dataView.getBigInt64(rowOffset + 18, true);      // 8 bytes
+    const sizeScaled = dataView.getInt32(rowOffset + 26, true);          // 4 bytes
+    const flags = dataView.getUint16(rowOffset + 30, true);              // 2 bytes
+    const tsInDelta = dataView.getInt32(rowOffset + 32, true);           // 4 bytes
+    const sequence = dataView.getUint32(rowOffset + 36, true);           // 4 bytes
+    const priceBidScaled = dataView.getInt32(rowOffset + 40, true);      // 4 bytes
+    const priceAskScaled = dataView.getInt32(rowOffset + 44, true);      // 4 bytes
+    const sizeBidScaled = dataView.getInt32(rowOffset + 48, true);       // 4 bytes
+    const sizeAskScaled = dataView.getInt32(rowOffset + 52, true);       // 4 bytes
+    const bidCt00 = dataView.getUint32(rowOffset + 56, true);            // 4 bytes
+    const askCt00 = dataView.getUint32(rowOffset + 60, true);            // 4 bytes
 
     // Calculate absolute timestamp in microseconds
     const absoluteTimestampUs = initialTimestampUs + deltaTimeUs;
@@ -177,14 +190,21 @@ function parseBinaryData(buffer) {
     const timestamp = new Date(timestampMs).toISOString();
 
     // Convert back to original values
+    const price = Number(priceScaled) / PRICE_SCALE;
+    const size = sizeScaled / SIZE_SCALE;
     const priceBid = priceBidScaled / PRICE_SCALE;
     const priceAsk = priceAskScaled / PRICE_SCALE;
     const sizeBid = sizeBidScaled / SIZE_SCALE;
     const sizeAsk = sizeAskScaled / SIZE_SCALE;
 
+    // Convert action and side from ASCII to char
+    const actionChar = action > 0 ? String.fromCharCode(action) : ' ';
+    const sideChar = side > 0 ? String.fromCharCode(side) : ' ';
+
     data.push({
       timestamp: timestamp,
       time: timestamp,
+      // Primary bid/ask data (for display)
       priceBid: priceBid.toFixed(5),
       priceAsk: priceAsk.toFixed(5),
       sizeBid: sizeBid.toFixed(2),
@@ -192,14 +212,168 @@ function parseBinaryData(buffer) {
       bid_price: priceBid.toFixed(5),
       ask_price: priceAsk.toFixed(5),
       bid_size: sizeBid.toFixed(2),
-      ask_size: sizeAsk.toFixed(2)
+      ask_size: sizeAsk.toFixed(2),
+      // Additional Databento MBP-1 fields
+      rtype: rtype,
+      publisher_id: publisherId,
+      instrument_id: instrumentId,
+      action: actionChar,
+      side: sideChar,
+      depth: depth,
+      price: price.toFixed(5),
+      size: size.toFixed(2),
+      flags: flags,
+      ts_in_delta: tsInDelta,
+      sequence: sequence,
+      bid_ct_00: bidCt00,
+      ask_ct_00: askCt00
     });
   }
 
-  console.log(`✅ Parsed ${data.length} ticks from binary data`);
+  console.log(`✅ Parsed ${data.length} ticks from binary data (Databento MBP-1 format)`);
   if (data.length > 0) {
     console.log(`📊 First tick: ${data[0].timestamp} - Bid: ${data[0].priceBid}, Ask: ${data[0].priceAsk}`);
     console.log(`📊 Last tick: ${data[data.length - 1].timestamp} - Bid: ${data[data.length - 1].priceBid}, Ask: ${data[data.length - 1].priceAsk}`);
+  }
+
+  return data;
+}
+
+function parseBinaryDataV3(buffer) {
+  // Version 3 binary format (NBBO with exchange snapshots):
+  // Header:
+  //   - TICK (4 bytes)
+  //   - version 3 (2 bytes)
+  //   - resample_interval_ms (2 bytes)
+  //   - num_samples (4 bytes)
+  //   - initial_timestamp (8 bytes, microseconds)
+  //   - publisher_map_length (2 bytes)
+  //   - publisher_map_string (variable)
+  // Per Sample:
+  //   - time_delta_ms (4 bytes)
+  //   - NBBO (22 bytes)
+  //   - num_exchanges (1 byte)
+  //   - Exchange data (11 bytes each)
+
+  const dataView = new DataView(buffer.buffer);
+  let offset = 0;
+
+  // Read header
+  const magicBytes = new Uint8Array(buffer.buffer, offset, 4);
+  const magic = new TextDecoder().decode(magicBytes);
+  offset += 4;
+
+  const version = dataView.getUint16(offset, true);
+  offset += 2;
+
+  const resampleIntervalMs = dataView.getUint16(offset, true);
+  offset += 2;
+
+  const numSamples = dataView.getUint32(offset, true);
+  offset += 4;
+
+  const initialTimestampUs = dataView.getBigUint64(offset, true);
+  offset += 8;
+
+  // Read publisher map
+  const publisherMapLength = dataView.getUint16(offset, true);
+  offset += 2;
+
+  const publisherMapBytes = buffer.slice(offset, offset + publisherMapLength);
+  const publisherMapStr = new TextDecoder().decode(publisherMapBytes);
+  offset += publisherMapLength;
+
+  // Parse publisher map: "0:1,1:2,2:3" -> {0: 1, 1: 2, 2: 3}
+  const publisherMap = {};
+  publisherMapStr.split(',').forEach(pair => {
+    const [idx, pubId] = pair.split(':');
+    publisherMap[parseInt(idx)] = parseInt(pubId);
+  });
+
+  console.log(`📦 Binary V3 format: samples=${numSamples}, interval=${resampleIntervalMs}ms, publishers=`, publisherMap);
+
+  // Parse samples
+  const data = [];
+  let cumulativeTimestampMs = Number(initialTimestampUs) / 1000; // Convert to milliseconds
+
+  for (let i = 0; i < numSamples; i++) {
+    // Time delta
+    const timeDeltaMs = dataView.getInt32(offset, true);
+    offset += 4;
+    cumulativeTimestampMs += timeDeltaMs;
+
+    // NBBO data
+    const nbboBid = dataView.getInt32(offset, true) / PRICE_SCALE;
+    offset += 4;
+    const nbboAsk = dataView.getInt32(offset, true) / PRICE_SCALE;
+    offset += 4;
+    const nbboBidSize = dataView.getInt32(offset, true) / SIZE_SCALE;
+    offset += 4;
+    const nbboAskSize = dataView.getInt32(offset, true) / SIZE_SCALE;
+    offset += 4;
+    const bestBidPub = dataView.getUint8(offset);
+    offset += 1;
+    const bestAskPub = dataView.getUint8(offset);
+    offset += 1;
+
+    // Exchange snapshots
+    const numExchanges = dataView.getUint8(offset);
+    offset += 1;
+
+    const exchanges = [];
+    for (let j = 0; j < numExchanges; j++) {
+      const publisherIdx = dataView.getUint8(offset);
+      offset += 1;
+      const bid = dataView.getInt32(offset, true) / PRICE_SCALE;
+      offset += 4;
+      const ask = dataView.getInt32(offset, true) / PRICE_SCALE;
+      offset += 4;
+      const bidSize = dataView.getUint16(offset, true) / SIZE_SCALE;
+      offset += 2;
+      const askSize = dataView.getUint16(offset, true) / SIZE_SCALE;
+      offset += 2;
+
+      exchanges.push({
+        publisher_id: publisherMap[publisherIdx],
+        publisher_index: publisherIdx,
+        bid: bid.toFixed(5),
+        ask: ask.toFixed(5),
+        bid_size: bidSize.toFixed(2),
+        ask_size: askSize.toFixed(2)
+      });
+    }
+
+    // Create timestamp (Unix timestamp in seconds with milliseconds)
+    const timestamp = new Date(cumulativeTimestampMs).toISOString();
+    const adjustedTimestamp = cumulativeTimestampMs / 1000; // Unix timestamp in seconds
+
+    data.push({
+      timestamp: timestamp,
+      time: timestamp,
+      adjustedTimestamp: adjustedTimestamp,
+      // NBBO for charts
+      bid_price: nbboBid.toFixed(5),
+      ask_price: nbboAsk.toFixed(5),
+      bid_size: nbboBidSize.toFixed(2),
+      ask_size: nbboAskSize.toFixed(2),
+      priceBid: nbboBid.toFixed(5),
+      priceAsk: nbboAsk.toFixed(5),
+      sizeBid: nbboBidSize.toFixed(2),
+      sizeAsk: nbboAskSize.toFixed(2),
+      // NBBO metadata
+      nbbo: true,
+      best_bid_publisher: publisherMap[bestBidPub],
+      best_ask_publisher: publisherMap[bestAskPub],
+      // Exchange snapshots for order book
+      exchanges: exchanges
+    });
+  }
+
+  console.log(`✅ Parsed ${data.length} NBBO samples from binary data (Version 3)`);
+  if (data.length > 0) {
+    console.log(`📊 First sample: ${data[0].timestamp} - NBBO Bid: ${data[0].priceBid}, Ask: ${data[0].priceAsk}`);
+    console.log(`📊 Last sample: ${data[data.length - 1].timestamp} - NBBO Bid: ${data[data.length - 1].priceBid}, Ask: ${data[data.length - 1].priceAsk}`);
+    console.log(`📊 Exchanges per sample: ${data[0].exchanges.length}`);
   }
 
   return data;

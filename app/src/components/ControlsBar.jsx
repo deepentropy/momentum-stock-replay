@@ -12,6 +12,8 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
 
   const handleTick = useCallback((tick) => {
     setError(null);
+
+    // V3 format already has NBBO calculated and proper timestamps
     const unixTime = tick.adjustedTimestamp;
 
     // Update current time for clock display
@@ -21,11 +23,13 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
       ...prev,  // Preserve level2Data
       quote: {
         t: unixTime,
-        bid: parseFloat(tick.bid_price || tick.priceBid),
-        ask: parseFloat(tick.ask_price || tick.priceAsk),
-        bidSize: parseFloat(tick.bid_size || tick.sizeBid),
-        askSize: parseFloat(tick.ask_size || tick.sizeAsk),
-        timestamp: tick.timestamp || tick.time
+        bid: parseFloat(tick.bid_price),
+        ask: parseFloat(tick.ask_price),
+        bidSize: parseFloat(tick.bid_size),
+        askSize: parseFloat(tick.ask_size),
+        timestamp: tick.timestamp,
+        nbbo: true,
+        exchanges: tick.exchanges || []  // Include exchange data for OrderBookPanel
       },
       stats: {
         ...prev.stats,
@@ -61,7 +65,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
     progress
   } = useTickPlayer(handleTick, handleInit, handleEnd);
 
-  const handlePlay = async () => {
+  const handlePlay = useCallback(async () => {
     if (!currentSession) return;
     // If paused, resume instead of restarting
     if (isPlaying && isPaused) {
@@ -81,44 +85,22 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
 
     try {
       let tickArray = null;
-      let l2Data = null;
 
       if (!tickData || tickData.sessionId !== currentSession.id) {
         console.log('📥 Loading tick data from GitHub...');
         const loadedData = await api.loadSessionData(currentSession.id);
 
-        // Extract level2Data (it's a property on the array)
-        l2Data = loadedData.level2Data || null;
-
-        // The loadedData IS the tick array (with level2Data as a property)
-        // We can use it directly, the property won't interfere with array iteration
+        // The loadedData is the tick array
         tickArray = loadedData;
 
-        // Store the tick data and level2Data separately
+        // Store the tick data
         setTickData({
           sessionId: currentSession.id,
-          data: tickArray,
-          level2Data: l2Data
+          data: tickArray
         });
       } else {
         // Use cached data
         tickArray = tickData.data;
-        l2Data = tickData.level2Data || null;
-      }
-
-      // Store Level 2 data in sessionData
-      if (l2Data) {
-        console.log(`✅ Level 2 data available: ${l2Data.length} entries`);
-        setSessionData(prev => ({
-          ...prev,
-          level2Data: l2Data
-        }));
-      } else {
-        console.log('ℹ️ No Level 2 data available, will use generated order book');
-        setSessionData(prev => ({
-          ...prev,
-          level2Data: null
-        }));
       }
 
       await loadAndPlay(currentSession.id, tickArray);
@@ -128,7 +110,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
       setStatus('error');
       onLoadingChange?.(false);
     }
-  };
+  }, [currentSession, tickData, isPlaying, isPaused, loadAndPlay, onLoadingChange, setSessionData]);
 
   const handlePause = () => {
     if (!isPlaying) return;

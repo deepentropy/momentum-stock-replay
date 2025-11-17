@@ -310,6 +310,18 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
 
     console.log('📊 Displaying preview with', previewData.length, 'ticks');
 
+    // Check if this is NBBO data (V3 format)
+    const isNBBO = previewData.length > 0 && previewData[0].nbbo === true;
+    console.log(`📊 Preview data format: ${isNBBO ? 'V3 NBBO' : 'V2 Legacy'}`);
+    if (previewData.length > 0) {
+      console.log('📊 First tick:', {
+        bid_price: previewData[0].bid_price,
+        ask_price: previewData[0].ask_price,
+        nbbo: previewData[0].nbbo,
+        exchanges: previewData[0].exchanges?.length
+      });
+    }
+
     // Convert preview data to tick format
     const previewTicks = previewData.map(tick => ({
       time: tick.adjustedTimestamp,
@@ -454,7 +466,12 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
     const mid = (bid + ask) / 2;
 
     try {
+      // Keep only last 50,000 ticks in memory to prevent memory overflow on large sessions
+      const MAX_TICKS_IN_MEMORY = 50000;
       allTicksData.current.push({ time: t, bid, ask, mid });
+      if (allTicksData.current.length > MAX_TICKS_IN_MEMORY) {
+        allTicksData.current = allTicksData.current.slice(-MAX_TICKS_IN_MEMORY);
+      }
       const bucketTime = Math.floor(t / timeframe) * timeframe;
 
       const updateLineSeries = (series, data, value) => {

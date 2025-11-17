@@ -3,7 +3,7 @@ Data models and schemas.
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, UTC
 
 
 @dataclass
@@ -74,7 +74,7 @@ class PipelineResult:
         self.errors.append({
             'step': step,
             'error': error,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(UTC).isoformat().replace('+00:00', 'Z')
         })
 
     def add_log(self, step: str, status: str, message: str = None):
@@ -82,7 +82,7 @@ class PipelineResult:
         entry = {
             'step': step,
             'status': status,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(UTC).isoformat().replace('+00:00', 'Z')
         }
         if message:
             entry['message'] = message

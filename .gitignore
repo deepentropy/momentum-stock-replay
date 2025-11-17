@@ -2,8 +2,8 @@
 .npmrc
 nul
 .tmp
-.claude
-
+.claude/
+summary/*
 # Security - credentials and sensitive data
 .env
 .env.local

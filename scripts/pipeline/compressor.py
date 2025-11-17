@@ -231,3 +231,251 @@ class BinaryCompressor:
             print(f"Space saved: {(1 - total_compressed / total_original) * 100:.1f}%")
 
         return all_stats
+
+
+class NBBOBinaryCompressor:
+    """Compresses NBBO resampled data to custom binary format (Version 3)."""
+
+    def __init__(self):
+        self.price_scale = Config.PRICE_SCALE
+        self.size_scale = Config.SIZE_SCALE
+        self.time_unit = Config.TIME_UNIT
+
+    def compress_file(self, parquet_file: Path, output_dir: Path, publisher_map: dict) -> CompressionStats:
+        """
+        Compress a single NBBO parquet file to binary format Version 3.
+
+        Binary format V3:
+        - Header:
+          * TICK (4 bytes)
+          * version 3 (2 bytes)
+          * resample_interval_ms (2 bytes)
+          * num_samples (4 bytes)
+          * initial_timestamp (8 bytes, microseconds)
+          * publisher_map_length (2 bytes)
+          * publisher_map_string (variable, e.g., "0:1,1:2,2:3...")
+        - Per Sample (variable size):
+          * time_delta_ms (4 bytes, int32, relative to previous)
+          * NBBO (22 bytes):
+            - bid (4 bytes, int32, scaled)
+            - ask (4 bytes, int32, scaled)
+            - bid_size (4 bytes, int32, scaled)
+            - ask_size (4 bytes, int32, scaled)
+            - best_bid_publisher (1 byte, uint8)
+            - best_ask_publisher (1 byte, uint8)
+          * num_exchanges (1 byte, uint8)
+          * For each exchange (11 bytes):
+            - publisher_idx (1 byte, uint8)
+            - bid (4 bytes, int32, scaled)
+            - ask (4 bytes, int32, scaled)
+            - bid_size (2 bytes, uint16, scaled)
+            - ask_size (2 bytes, uint16, scaled)
+
+        Args:
+            parquet_file: Path to NBBO resampled parquet file
+            output_dir: Output directory
+            publisher_map: Dict mapping publisher_id to index
+
+        Returns:
+            CompressionStats
+        """
+        # Read parquet
+        df = pd.read_parquet(parquet_file)
+
+        if df.empty:
+            raise ValueError("Empty DataFrame")
+
+        # Sort by timestamp
+        df = df.sort_values('timestamp').reset_index(drop=True)
+
+        # Initial timestamp
+        t0 = df['timestamp'].iloc[0]
+        initial_timestamp_us = int(t0.timestamp() * self.time_unit)
+
+        # Build publisher map string (e.g., "0:1,1:2,2:3")
+        publisher_map_str = ','.join([f"{idx}:{pub_id}" for pub_id, idx in publisher_map.items()])
+        publisher_map_bytes = publisher_map_str.encode('utf-8')
+
+        # Create reverse map (publisher_id -> index)
+        publisher_id_to_idx = {pub_id: idx for pub_id, idx in publisher_map.items()}
+
+        # Build binary buffer
+        num_samples = len(df)
+        buffer = bytearray()
+
+        # Header
+        header = struct.pack(
+            '<4sHHIQ',
+            Config.BINARY_MAGIC,
+            Config.BINARY_VERSION_V3,
+            Config.NBBO_RESAMPLE_INTERVAL_MS,
+            num_samples,
+            initial_timestamp_us
+        )
+        buffer.extend(header)
+
+        # Publisher map
+        buffer.extend(struct.pack('<H', len(publisher_map_bytes)))
+        buffer.extend(publisher_map_bytes)
+
+        # Data samples
+        prev_timestamp_ms = int(t0.timestamp() * 1000)
+
+        for i in range(num_samples):
+            row = df.iloc[i]
+
+            # Timestamp delta in milliseconds
+            current_timestamp_ms = int(row['timestamp'].timestamp() * 1000)
+            time_delta_ms = current_timestamp_ms - prev_timestamp_ms
+            prev_timestamp_ms = current_timestamp_ms
+
+            # NBBO data
+            nbbo_bid = int(row['nbbo_bid'] * self.price_scale)
+            nbbo_ask = int(row['nbbo_ask'] * self.price_scale)
+            nbbo_bid_size = int(row['nbbo_bid_size'] * self.size_scale)
+            nbbo_ask_size = int(row['nbbo_ask_size'] * self.size_scale)
+            best_bid_pub = publisher_id_to_idx.get(row['nbbo_bid_publisher'], 0)
+            best_ask_pub = publisher_id_to_idx.get(row['nbbo_ask_publisher'], 0)
+
+            # Pack NBBO
+            nbbo_data = struct.pack(
+                '<iiiiiBB',  # 5 ints + 2 bytes
+                time_delta_ms,
+                nbbo_bid,
+                nbbo_ask,
+                nbbo_bid_size,
+                nbbo_ask_size,
+                best_bid_pub,
+                best_ask_pub
+            )
+            buffer.extend(nbbo_data)
+
+            # Exchange snapshots
+            exchanges_data = []
+            for pub_id, pub_idx in publisher_map.items():
+                # Check if this exchange has data in this row
+                bid_col = f'ex_{pub_id}_bid'
+                ask_col = f'ex_{pub_id}_ask'
+                bid_size_col = f'ex_{pub_id}_bid_size'
+                ask_size_col = f'ex_{pub_id}_ask_size'
+
+                if bid_col in row.index and not pd.isna(row[bid_col]):
+                    bid = int(row[bid_col] * self.price_scale)
+                    ask = int(row[ask_col] * self.price_scale)
+                    bid_size = int(row[bid_size_col] * self.size_scale)
+                    ask_size = int(row[ask_size_col] * self.size_scale)
+
+                    # Clamp sizes to uint16 range
+                    bid_size = min(bid_size, 65535)
+                    ask_size = min(ask_size, 65535)
+
+                    exchanges_data.append((pub_idx, bid, ask, bid_size, ask_size))
+
+            # Write number of exchanges
+            buffer.extend(struct.pack('<B', len(exchanges_data)))
+
+            # Write each exchange
+            for pub_idx, bid, ask, bid_size, ask_size in exchanges_data:
+                exchange_data = struct.pack(
+                    '<BiiHH',
+                    pub_idx,
+                    bid,
+                    ask,
+                    bid_size,
+                    ask_size
+                )
+                buffer.extend(exchange_data)
+
+        # Compress with gzip
+        compressed = gzip.compress(bytes(buffer), compresslevel=Config.GZIP_LEVEL)
+
+        # Extract filename and save
+        filename = parquet_file.stem  # e.g., "CYPH_2025-11-14_nbbo"
+        symbol = filename.split('_')[0]
+        date_str = filename.split('_')[1].replace('-', '')
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dest_file = output_dir / f"{symbol}-{date_str}.bin.gz"
+
+        with open(dest_file, 'wb') as f:
+            f.write(compressed)
+
+        # Create stats
+        stats = CompressionStats(
+            symbol=symbol,
+            date=date_str,
+            input_file=str(parquet_file),
+            output_file=str(dest_file),
+            num_rows=num_samples,
+            original_size_mb=len(buffer) / (1024 * 1024),
+            compressed_size_mb=len(compressed) / (1024 * 1024),
+            compression_ratio=len(buffer) / len(compressed),
+            compression_pct=(len(compressed) / len(buffer)) * 100
+        )
+
+        return stats
+
+    def compress_directory(self, nbbo_dir: Path, date: str, output_dir: Path) -> List[CompressionStats]:
+        """Compress all NBBO files for a given date."""
+        print(f"\n{'='*80}")
+        print("Compressing NBBO Data to Binary Format (Version 3)")
+        print(f"{'='*80}\n")
+
+        date_dir = nbbo_dir / date
+        parquet_files = list(date_dir.glob('*_nbbo.parquet'))
+
+        if not parquet_files:
+            print(f"[WARNING] No NBBO files found in {date_dir}")
+            return []
+
+        print(f"Found {len(parquet_files)} files to compress")
+        print(f"Output: {output_dir}")
+
+        all_stats = []
+        for i, pf in enumerate(parquet_files, 1):
+            try:
+                print(f"[{i}/{len(parquet_files)}] {pf.name}...", end=' ')
+
+                # Read parquet to get publisher map
+                df = pd.read_parquet(pf)
+                if df.empty:
+                    print("[SKIPPED] Empty file")
+                    continue
+
+                # Extract publisher map from columns
+                publishers = []
+                for col in df.columns:
+                    if col.startswith('ex_') and col.endswith('_bid'):
+                        pub_id = int(col.split('_')[1])
+                        if pub_id not in publishers:
+                            publishers.append(pub_id)
+
+                publishers.sort()
+                publisher_map = {pub_id: idx for idx, pub_id in enumerate(publishers)}
+
+                stats = self.compress_file(pf, output_dir, publisher_map)
+                all_stats.append(stats)
+                print(f"{stats.num_rows:,} samples -> {stats.compressed_size_mb:.2f} MB "
+                      f"({stats.compression_ratio:.2f}x)")
+            except Exception as e:
+                print(f"[ERROR] {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Summary
+        if all_stats:
+            total_original = sum(s.original_size_mb for s in all_stats)
+            total_compressed = sum(s.compressed_size_mb for s in all_stats)
+            total_samples = sum(s.num_rows for s in all_stats)
+
+            print(f"\n{'='*80}")
+            print(f"COMPRESSION SUMMARY (Version 3)")
+            print(f"{'='*80}")
+            print(f"Files: {len(all_stats)}")
+            print(f"Total samples: {total_samples:,}")
+            print(f"Original size: {total_original:.2f} MB")
+            print(f"Compressed size: {total_compressed:.2f} MB")
+            print(f"Compression ratio: {total_original / total_compressed:.2f}x")
+            print(f"Space saved: {(1 - total_compressed / total_original) * 100:.1f}%")
+
+        return all_stats
