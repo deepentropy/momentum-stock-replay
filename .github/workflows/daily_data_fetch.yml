@@ -77,11 +77,10 @@ jobs:
 
           # Check if there are changes to commit
           if ! git diff --quiet --staged; then
-            git commit -m "Add pipeline results for $DATE [skip ci]
-
-- Compressed session files
-- Run-up analysis results
-- Pipeline execution summary"
+            git commit -m "Add pipeline results for $DATE [skip ci]" \
+              -m "- Compressed session files" \
+              -m "- Run-up analysis results" \
+              -m "- Pipeline execution summary"
             git push
           else
             echo "No changes to commit"
