@@ -23,3 +23,18 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+
+# Data files (large datasets - excluded from git)
+databento_data/
+databento_mbp1_data/
+fundamentals_*.json
+!fundamentals.json
+
+# Analysis results and logs (excluded from git)
+runup_analysis_*.json
+runup_analysis_*.csv
+pipeline_log_*.json
+
+# Compressed sessions and summaries (COMMITTED to git - do NOT exclude)
+# sessions/
+# summary/

@@ -1,0 +1,95 @@
+name: Daily Data Fetch
+
+on:
+  schedule:
+    # Run daily at 6:00 PM ET (after market close at 4:00 PM ET)
+    # 6:00 PM ET = 11:00 PM UTC (EST) or 10:00 PM UTC (EDT)
+    - cron: '0 23 * * 1-5'  # Monday-Friday at 11 PM UTC
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unified data pipeline
+        env:
+          STOCKFUNDAMENTALS_PAT: ${{ secrets.FUNDAMENTALS_REPO_TOKEN }}
+          DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
+        run: |
+          # Get yesterday's date (market data available next day)
+          DATE=$(date -d "yesterday" +%Y-%m-%d)
+          echo "Running unified pipeline for date: $DATE"
+
+          # Run unified pipeline (scripts/main.py)
+          python scripts/main.py --date $DATE
+
+      - name: Upload data as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-data-${{ github.run_number }}
+          path: |
+            databento_data/
+            databento_mbp1_data/
+            fundamentals_*_filtered.json
+            runup_analysis_*.json
+            runup_analysis_*.csv
+            pipeline_log_*.json
+          retention-days: 90
+
+      - name: Commit and push session data and summaries
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Get date for commit message
+          DATE=$(date -d "yesterday" +%Y-%m-%d)
+
+          # Add compressed session files (to be committed)
+          git add sessions/*.bin.gz || true
+
+          # Add summaries (to be committed)
+          git add summary/*_summary.json || true
+
+          # Add analysis results (small files)
+          git add runup_analysis_*.json || true
+          git add runup_analysis_*.csv || true
+
+          # Add pipeline execution logs
+          git add pipeline_log_*.json || true
+
+          # Note: Large data files (databento_data, databento_mbp1_data) are in .gitignore
+          # They are saved as artifacts instead
+
+          # Check if there are changes to commit
+          if ! git diff --quiet --staged; then
+            git commit -m "Add pipeline results for $DATE [skip ci]
+
+- Compressed session files
+- Run-up analysis results
+- Pipeline execution summary"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+        continue-on-error: true
+
+      - name: Cleanup old artifacts (keep last 30 days)
+        run: |
+          # Optional: Add cleanup script here to remove old data files
+          echo "Cleanup step - implement if needed"
+        continue-on-error: true
