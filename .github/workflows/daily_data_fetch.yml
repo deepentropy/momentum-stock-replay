@@ -28,7 +28,7 @@ jobs:
 
       - name: Run unified data pipeline
         env:
-          STOCKFUNDAMENTALS_PAT: ${{ secrets.FUNDAMENTALS_REPO_TOKEN }}
+          STOCKFUNDAMENTALS_PAT: ${{ secrets.STOCKFUNDAMENTALS_PAT }}
           DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
         run: |
           # Get yesterday's date (market data available next day)
