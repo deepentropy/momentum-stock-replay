@@ -26,38 +26,67 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Check API credentials
+        run: |
+          if [ -z "${{ secrets.DATABENTO_API_KEY }}" ]; then
+            echo "::error::DATABENTO_API_KEY secret is not set. Please add it to repository secrets."
+            exit 1
+          fi
+          if [ -z "${{ secrets.STOCKFUNDAMENTALS_PAT }}" ]; then
+            echo "::error::STOCKFUNDAMENTALS_PAT secret is not set. Please add it to repository secrets."
+            exit 1
+          fi
+          echo "✓ API credentials configured"
+
+      - name: Calculate target date
+        id: date
+        run: |
+          # Get yesterday's date (market data available next day)
+          DATE=$(date -d "yesterday" +%Y-%m-%d)
+          DAY_OF_WEEK=$(date -d "$DATE" +%u)  # 1=Monday, 7=Sunday
+
+          echo "Target date: $DATE (day of week: $DAY_OF_WEEK)"
+
+          # Skip weekends (Saturday=6, Sunday=7)
+          if [ "$DAY_OF_WEEK" -eq 6 ] || [ "$DAY_OF_WEEK" -eq 7 ]; then
+            echo "::warning::Skipping weekend date: $DATE"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+
       - name: Run unified data pipeline
+        if: steps.date.outputs.skip == 'false'
         env:
           STOCKFUNDAMENTALS_PAT: ${{ secrets.STOCKFUNDAMENTALS_PAT }}
           DATABENTO_API_KEY: ${{ secrets.DATABENTO_API_KEY }}
         run: |
-          # Get yesterday's date (market data available next day)
-          DATE=$(date -d "yesterday" +%Y-%m-%d)
+          DATE="${{ steps.date.outputs.date }}"
           echo "Running unified pipeline for date: $DATE"
 
           # Run unified pipeline (scripts/main.py)
           python scripts/main.py --date $DATE
 
       - name: Upload data as artifacts
+        if: steps.date.outputs.skip == 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: market-data-${{ github.run_number }}
+          name: market-data-${{ steps.date.outputs.date }}
           path: |
-            databento_data/
-            databento_mbp1_data/
-            fundamentals_*_filtered.json
-            runup_analysis_*.json
-            runup_analysis_*.csv
-            pipeline_log_*.json
-          retention-days: 90
+            .pipeline_temp/**/*
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Commit and push session data and summaries
+        if: steps.date.outputs.skip == 'false'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
           # Get date for commit message
-          DATE=$(date -d "yesterday" +%Y-%m-%d)
+          DATE="${{ steps.date.outputs.date }}"
 
           # Add compressed session files (to be committed)
           git add sessions/*.bin.gz || true
