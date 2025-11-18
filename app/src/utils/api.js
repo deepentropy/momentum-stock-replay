@@ -140,11 +140,11 @@ function parseBinaryDataV2(buffer) {
   // Header (18 bytes): Magic number (4 bytes) + Version (2 bytes) + Num rows (4 bytes) + Initial timestamp (8 bytes)
   // Data rows (64 bytes each): Full MBP-1 data with bid/ask prices, sizes, counts, and metadata
 
-  const dataView = new DataView(buffer.buffer);
+  const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let offset = 0;
 
   // Read header (18 bytes)
-  const magicBytes = new Uint8Array(buffer.buffer, offset, 4);
+  const magicBytes = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, 4);
   const magic = new TextDecoder().decode(magicBytes);
   offset += 4;
 
@@ -273,11 +273,11 @@ function parseBinaryDataV3(buffer) {
   //   - num_exchanges (1 byte)
   //   - Exchange data (11 bytes each)
 
-  const dataView = new DataView(buffer.buffer);
+  const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   let offset = 0;
 
   // Read header
-  const magicBytes = new Uint8Array(buffer.buffer, offset, 4);
+  const magicBytes = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, 4);
   const magic = new TextDecoder().decode(magicBytes);
   offset += 4;
 
