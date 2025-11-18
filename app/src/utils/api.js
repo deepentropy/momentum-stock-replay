@@ -1,5 +1,5 @@
-const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/houseofai/momentum-stock-replay/main/sessions';
-const GITHUB_API_BASE = 'https://api.github.com/repos/houseofai/momentum-stock-replay/contents/sessions';
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/deepentropy/momentum-stock-replay/main/sessions';
+const GITHUB_API_BASE = 'https://api.github.com/repos/deepentropy/momentum-stock-replay/contents/sessions';
 
 // Constants matching your Python script (compress.py)
 const PRICE_SCALE = 100_000; // 5 decimal places precision
