@@ -28,7 +28,7 @@ class FundamentalsFetcher:
         print("Fetching Fundamentals from GitHub")
         print(f"{'='*80}\n")
 
-        # Get latest date folder
+        # Get the latest date folder
         api_url = f"https://api.github.com/repos/{Config.FUNDAMENTALS_REPO}/contents/{Config.FUNDAMENTALS_PATH}"
         response = requests.get(api_url, headers=self.headers)
         response.raise_for_status()
