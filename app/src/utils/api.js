@@ -61,9 +61,27 @@ export const api = {
     // Get the compressed binary data
     const arrayBuffer = await response.arrayBuffer();
 
-    // Decompress using pako (you'll need to install: npm install pako)
-    const pako = await import('pako');
-    const decompressed = pako.inflate(new Uint8Array(arrayBuffer));
+    // Decompress using pako
+    const pakoModule = await import('pako');
+    const pako = pakoModule.default || pakoModule;
+    
+    let decompressed;
+    try {
+      const result = pako.inflate(new Uint8Array(arrayBuffer));
+      
+      if (!result) {
+        throw new Error('Pako inflate returned null/undefined - file may be corrupted or not a valid gzip file');
+      }
+      
+      // Ensure we have a proper Uint8Array with .buffer property
+      decompressed = result instanceof Uint8Array ? result : new Uint8Array(result);
+    } catch (error) {
+      throw new Error(`Failed to decompress session data: ${error.message}`);
+    }
+    
+    if (!decompressed || decompressed.length === 0) {
+      throw new Error('Decompression resulted in invalid data');
+    }
 
     // Detect version and parse accordingly
     const dataView = new DataView(decompressed.buffer);
