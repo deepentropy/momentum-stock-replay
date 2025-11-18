@@ -118,6 +118,54 @@ Sessions are stored in a custom binary format optimized for replay:
 
 All data is gzip-compressed for efficient storage and transmission.
 
+## Data Fetching
+
+### Fetching Individual Sessions
+
+Use the standalone `fetch_mbp1_symbol.py` script to fetch MBP-1 data for specific symbols and time ranges:
+
+```bash
+# Fetch a full trading day
+python fetch_mbp1_symbol.py AAPL 2025-01-15 2025-01-16
+
+# Fetch a specific time range
+python fetch_mbp1_symbol.py AAPL "2025-01-15 09:30:00" "2025-01-15 16:00:00"
+
+# Use a single exchange instead of multi-exchange
+python fetch_mbp1_symbol.py TSLA 2025-01-15 2025-01-16 --single-exchange --dataset XNYS.PILLAR
+```
+
+The script will:
+1. Fetch MBP-1 tick data from Databento (multi-exchange by default)
+2. Resample to NBBO at 100ms intervals
+3. Compress to binary format
+4. Save to `sessions/SYMBOL-YYYYMMDD.bin.gz`
+
+**Requirements:**
+- Set `DATABENTO_API_KEY` environment variable
+- Install dependencies: `pip install pandas numpy databento`
+
+### Processing Multiple Sessions
+
+Use `script/get_sessions.py` to process all missing sessions from `sessions/sessions.csv`:
+
+```bash
+python script/get_sessions.py
+```
+
+The CSV format:
+```csv
+symbol, date, start_time, end_time
+AMIX, 2025-11-17, 13:03:00, 15:15:00
+GLMD, 2025-11-17, 13:30:00, 14:30:00
+```
+
+The script will:
+1. Read all sessions from `sessions/sessions.csv`
+2. Check for existing binary files (assumes one session per symbol per day)
+3. Fetch missing sessions automatically
+4. Show progress and summary
+
 ### Supported Exchanges
 
 - **NASDAQ** (XNAS.ITCH)

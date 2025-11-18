@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   buyShortcut: 'Shift+1',
   sellShortcut: 'Ctrl+S',
   orderBookDepth: 15,
+  orderBookMinSize: 100,
   timezone: 'America/New_York', // Fixed to New York
 };
 

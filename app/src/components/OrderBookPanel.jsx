@@ -97,15 +97,16 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
 
   // Map publisher IDs to exchange names
   const getExchangeName = (publisherId) => {
-    // Databento publisher IDs - common ones
+    // Databento publisher IDs
     const publisherMap = {
-      1: 'NSDQ',   // XNAS
-      2: 'NYSE',   // XNYS
-      3: 'ARCA',   // ARCX
-      4: 'BATS',   // BATS/BZX
+      1: 'NSDQ',   // NASDAQ
+      2: 'NYSE',   // NYSE
+      3: 'ARCA',   // NYSE Arca
+      4: 'BATS',   // Cboe BZX
       5: 'IEXG',   // IEX
-      6: 'BOSX',   // XBOS (NASDAQ BX)
-      7: 'PHLX',   // XPSX (NASDAQ PSX)
+      9: 'BATY',   // Cboe BYX
+      38: 'EDGA',  // Cboe EDGA
+      43: 'PHLX',  // NASDAQ PSX
       // Add more as needed based on actual data
     };
     return publisherMap[publisherId] || `EX${publisherId}`;
@@ -119,7 +120,7 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
 
     // V3 format: Use real multi-exchange data from quote.exchanges
     const bids = quote.exchanges
-      .filter(ex => ex.bid_price > 0)
+      .filter(ex => ex.bid_price > 0 && parseFloat(ex.bid_size) >= settings.orderBookMinSize)
       .map(ex => ({
         maker: getExchangeName(ex.publisher_id),
         price: parseFloat(ex.bid_price),
@@ -128,7 +129,7 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
       .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
 
     const asks = quote.exchanges
-      .filter(ex => ex.ask_price > 0)
+      .filter(ex => ex.ask_price > 0 && parseFloat(ex.ask_size) >= settings.orderBookMinSize)
       .map(ex => ({
         maker: getExchangeName(ex.publisher_id),
         price: parseFloat(ex.ask_price),
@@ -137,7 +138,7 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
       .sort((a, b) => a.price - b.price); // Sort by price ascending (best ask first)
 
     return { bids, asks };
-  }, [quote]);
+  }, [quote, settings.orderBookMinSize]);
 
   // Assign colors based on unique price levels
   const getPriceLevelColors = () => {

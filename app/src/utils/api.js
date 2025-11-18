@@ -346,16 +346,16 @@ function parseBinaryDataV3(buffer) {
       offset += 4;
       const ask = dataView.getInt32(offset, true) / PRICE_SCALE;
       offset += 4;
-      const bidSize = dataView.getUint16(offset, true) / SIZE_SCALE;
-      offset += 2;
-      const askSize = dataView.getUint16(offset, true) / SIZE_SCALE;
-      offset += 2;
+      const bidSize = dataView.getUint32(offset, true) / SIZE_SCALE;
+      offset += 4;
+      const askSize = dataView.getUint32(offset, true) / SIZE_SCALE;
+      offset += 4;
 
       exchanges.push({
         publisher_id: publisherMap[publisherIdx],
         publisher_index: publisherIdx,
-        bid: bid.toFixed(5),
-        ask: ask.toFixed(5),
+        bid_price: bid.toFixed(5),
+        ask_price: ask.toFixed(5),
         bid_size: bidSize.toFixed(2),
         ask_size: askSize.toFixed(2)
       });

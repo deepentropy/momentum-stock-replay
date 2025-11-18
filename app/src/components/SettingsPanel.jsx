@@ -110,27 +110,56 @@ export default function SettingsPanel() {
             📖 Order Book
           </h3>
 
-          <div>
-            <label className="text-sm text-gray-400 block mb-1">Depth Levels</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min="5"
-                max="30"
-                value={settings.orderBookDepth}
-                onChange={(e) => updateSetting('orderBookDepth', Number(e.target.value))}
-                className="flex-1"
-              />
-              <input
-                type="number"
-                min="5"
-                max="30"
-                value={settings.orderBookDepth}
-                onChange={(e) => updateSetting('orderBookDepth', Number(e.target.value))}
-                className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          <div className="space-y-3">
+            {/* Depth Levels */}
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Depth Levels</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="5"
+                  max="30"
+                  value={settings.orderBookDepth}
+                  onChange={(e) => updateSetting('orderBookDepth', Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="number"
+                  min="5"
+                  max="30"
+                  value={settings.orderBookDepth}
+                  onChange={(e) => updateSetting('orderBookDepth', Number(e.target.value))}
+                  className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Number of bid/ask levels to display (minimum: 5)</p>
             </div>
-            <p className="text-xs text-gray-500 mt-1">Number of bid/ask levels to display (minimum: 5)</p>
+
+            {/* Minimum Size Filter */}
+            <div>
+              <label className="text-sm text-gray-400 block mb-1">Minimum Size</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="50"
+                  value={settings.orderBookMinSize}
+                  onChange={(e) => updateSetting('orderBookMinSize', Number(e.target.value))}
+                  className="flex-1"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="10000"
+                  step="10"
+                  value={settings.orderBookMinSize}
+                  onChange={(e) => updateSetting('orderBookMinSize', Number(e.target.value))}
+                  className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Only show levels with at least this many shares (0 = show all)</p>
+            </div>
           </div>
         </div>
       </div>
