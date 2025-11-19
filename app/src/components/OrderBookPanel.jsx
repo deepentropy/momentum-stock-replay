@@ -120,7 +120,11 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
 
     // V3 format: Use real multi-exchange data from quote.exchanges
     const bids = quote.exchanges
-      .filter(ex => ex.bid_price > 0 && parseFloat(ex.bid_size) >= settings.orderBookMinSize)
+      .filter(ex => {
+        const bidPrice = parseFloat(ex.bid_price);
+        const bidSize = parseFloat(ex.bid_size);
+        return bidPrice > 0 && bidSize >= settings.orderBookMinSize;
+      })
       .map(ex => ({
         maker: getExchangeName(ex.publisher_id),
         price: parseFloat(ex.bid_price),
@@ -129,7 +133,11 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
       .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
 
     const asks = quote.exchanges
-      .filter(ex => ex.ask_price > 0 && parseFloat(ex.ask_size) >= settings.orderBookMinSize)
+      .filter(ex => {
+        const askPrice = parseFloat(ex.ask_price);
+        const askSize = parseFloat(ex.ask_size);
+        return askPrice > 0 && askSize >= settings.orderBookMinSize;
+      })
       .map(ex => ({
         maker: getExchangeName(ex.publisher_id),
         price: parseFloat(ex.ask_price),
