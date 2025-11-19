@@ -14,6 +14,7 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
   const chartRef = useRef(null);
   const internalProviderRef = useRef(null);
   const [chartReady, setChartReady] = useState(false);
+  const initializingRef = useRef(false); // Prevent double initialization
 
   // Expose the provider via the parent's providerRef
   useEffect(() => {
@@ -39,23 +40,31 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
   // Initialize chart when container is ready
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    if (!chartContainerRef.current || initializingRef.current) return;
 
-    // Check if chart element already exists (React StrictMode double-mount)
-    if (chartContainerRef.current.querySelector('oakview-chart')) {
-      console.log('✓ OakView chart already exists (StrictMode)');
-      const existingChart = chartContainerRef.current.querySelector('oakview-chart');
+    // Check if chart element already exists
+    const existingChart = chartContainerRef.current.querySelector('oakview-chart');
+    if (existingChart) {
+      console.log('✓ OakView chart already exists, reusing it');
       chartRef.current = existingChart;
       setChartReady(true);
       return;
     }
 
+    initializingRef.current = true;
     console.log('📊 Initializing OakView chart...');
 
     // OakViewChart is imported, so Web Component should be registered
-    // Wait for it to be defined
     customElements.whenDefined('oakview-chart').then(() => {
       console.log('✓ oakview-chart Web Component is defined');
+      
+      // Double-check it wasn't created in the meantime
+      if (chartContainerRef.current?.querySelector('oakview-chart')) {
+        console.log('⚠️ Chart was created while waiting, using existing one');
+        chartRef.current = chartContainerRef.current.querySelector('oakview-chart');
+        setChartReady(true);
+        return;
+      }
       
       // Create the chart element
       const chartElement = document.createElement('oakview-chart');
@@ -63,23 +72,24 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
       chartElement.setAttribute('width', '100%');
       chartElement.setAttribute('height', '100%');
       
-      chartContainerRef.current.appendChild(chartElement);
-      chartRef.current = chartElement;
+      if (chartContainerRef.current) {
+        chartContainerRef.current.appendChild(chartElement);
+        chartRef.current = chartElement;
 
-      // oakview-chart doesn't have chart-ready event
-      // Chart is ready after connectedCallback
-      // Use requestAnimationFrame to ensure element is fully connected
-      requestAnimationFrame(() => {
-        console.log('✓ OakView chart element connected');
-        setChartReady(true);
-      });
+        // Use requestAnimationFrame to ensure element is fully connected
+        requestAnimationFrame(() => {
+          console.log('✓ OakView chart element connected');
+          setChartReady(true);
+        });
+      }
     }).catch(error => {
       console.error('❌ Failed to initialize OakView chart:', error);
+      initializingRef.current = false;
     });
 
+    // Don't clean up on unmount - let the element persist
     return () => {
-      // Cleanup - but don't remove if React is just re-mounting
-      // Only clear the ref
+      // Just clear refs, don't remove DOM
       chartRef.current = null;
       setChartReady(false);
     };
