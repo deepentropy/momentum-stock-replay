@@ -57,9 +57,11 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
       chartContainerRef.current.appendChild(chartElement);
       chartRef.current = chartElement;
 
-      // Wait for chart to be ready
-      chartElement.addEventListener('chart-ready', (event) => {
-        console.log('✓ Chart ready', event.detail);
+      // oakview-chart doesn't have chart-ready event
+      // Chart is ready after connectedCallback
+      // Use requestAnimationFrame to ensure element is fully connected
+      requestAnimationFrame(() => {
+        console.log('✓ OakView chart element connected');
         setChartReady(true);
       });
     }).catch(error => {
@@ -72,17 +74,27 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
         chartContainerRef.current.innerHTML = '';
       }
       chartRef.current = null;
+      setChartReady(false);
     };
   }, []);
 
   // Load session when currentSession changes
   useEffect(() => {
-    if (!chartReady || !currentSession || !chartRef.current) return;
+    if (!chartReady || !currentSession || !chartRef.current) {
+      console.log('⏳ Waiting for chart ready...', { chartReady, currentSession: !!currentSession, chartRef: !!chartRef.current });
+      return;
+    }
 
     const loadSession = async () => {
-      console.log('📥 Loading session:', currentSession.id);
+      console.log('📥 OakView: Loading session:', currentSession.id);
 
       try {
+        // Verify chart element exists
+        if (!chartRef.current.getChart) {
+          console.error('❌ Chart element does not have getChart method');
+          return;
+        }
+
         // Create provider if doesn't exist
         if (!internalProviderRef.current) {
           internalProviderRef.current = new ReplaySessionDataProvider();
@@ -95,13 +107,18 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
           sessionId: currentSession.id 
         });
 
-        console.log('✓ Session metadata:', metadata);
+        console.log('✓ OakView: Session metadata:', metadata);
 
         // Get the underlying lightweight-charts instance
         const lwChart = chartRef.current.getChart();
+        console.log('✓ OakView: Got chart instance:', lwChart);
+
+        // Clear existing series
+        chartRef.current.clearSeries();
 
         // Create candlestick series
         const candleSeries = chartRef.current.addCandlestickSeries();
+        console.log('✓ OakView: Added candlestick series');
         
         // Create line series for bid/ask/mid
         const bidSeries = chartRef.current.addLineSeries([], {
@@ -121,19 +138,21 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
           lineWidth: 2,
           title: 'Mid'
         });
+        console.log('✓ OakView: Added line series (bid/ask/mid)');
 
         // Load preview data (historical)
         const previewBars = await provider.fetchHistorical(metadata.symbol, '1');
         
         // Display preview
-        console.log('📊 Displaying preview:', previewBars.length, 'bars');
+        console.log('📊 OakView: Displaying preview:', previewBars.length, 'bars');
         candleSeries.setData(previewBars);
         
         // Fit content
         lwChart.timeScale().fitContent();
+        console.log('✓ OakView: Chart ready with preview data');
 
       } catch (error) {
-        console.error('❌ Failed to load session:', error);
+        console.error('❌ OakView: Failed to load session:', error);
       }
     };
 
