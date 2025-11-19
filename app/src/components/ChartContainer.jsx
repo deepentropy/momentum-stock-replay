@@ -7,6 +7,7 @@
 
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
+import { OakViewChart } from 'oakview';
 
 const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
   const chartContainerRef = useRef(null);
@@ -42,10 +43,10 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
     console.log('📊 Initializing OakView chart...');
 
-    // Import and register OakView Web Component
-    import('oakview').then((oakview) => {
-      // OakView automatically registers the web component
-      console.log('✓ OakView loaded');
+    // OakViewChart is imported, so Web Component should be registered
+    // Wait for it to be defined
+    customElements.whenDefined('oakview-chart').then(() => {
+      console.log('✓ oakview-chart Web Component is defined');
       
       // Create the chart element
       const chartElement = document.createElement('oakview-chart');
@@ -62,7 +63,7 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
         setChartReady(true);
       });
     }).catch(error => {
-      console.error('❌ Failed to load OakView:', error);
+      console.error('❌ Failed to initialize OakView chart:', error);
     });
 
     return () => {
