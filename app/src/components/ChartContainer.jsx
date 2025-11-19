@@ -8,11 +8,18 @@
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
 
-const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading }, ref) => {
+const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
-  const providerRef = useRef(null);
+  const internalProviderRef = useRef(null);
   const [chartReady, setChartReady] = useState(false);
+
+  // Expose the provider via the parent's providerRef
+  useEffect(() => {
+    if (providerRef && internalProviderRef.current) {
+      providerRef.current = internalProviderRef.current;
+    }
+  }, [providerRef, internalProviderRef.current]);
 
   // Expose methods to parent
   useImperativeHandle(ref, () => ({
@@ -25,7 +32,8 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading }, r
       if (chartRef.current && chartRef.current.clearMarkers) {
         chartRef.current.clearMarkers();
       }
-    }
+    },
+    getProvider: () => internalProviderRef.current
   }));
 
   // Initialize chart when container is ready
@@ -75,11 +83,11 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading }, r
 
       try {
         // Create provider if doesn't exist
-        if (!providerRef.current) {
-          providerRef.current = new ReplaySessionDataProvider();
+        if (!internalProviderRef.current) {
+          internalProviderRef.current = new ReplaySessionDataProvider();
         }
 
-        const provider = providerRef.current;
+        const provider = internalProviderRef.current;
 
         // Initialize with session
         const metadata = await provider.initialize({ 
@@ -132,9 +140,9 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading }, r
 
     return () => {
       // Cleanup provider on session change
-      if (providerRef.current) {
-        providerRef.current.disconnect();
-        providerRef.current = null;
+      if (internalProviderRef.current) {
+        internalProviderRef.current.disconnect();
+        internalProviderRef.current = null;
       }
     };
   }, [currentSession, chartReady]);

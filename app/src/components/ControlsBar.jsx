@@ -1,14 +1,29 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useTickPlayer } from "../hooks/useTickPlayer";
 import { api } from "../utils/api";
+import { USE_OAKVIEW_CHART } from "../config";
 
-export default function ControlsBar({ currentSession, sessionData, setSessionData, onLoadingChange }) {
+export default function ControlsBar({ currentSession, sessionData, setSessionData, onLoadingChange, providerRef, chartRef }) {
   const [status, setStatus] = useState('disconnected');
   const [error, setError] = useState(null);
   const [tickData, setTickData] = useState(null);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(null);
   const [showPlayTooltip, setShowPlayTooltip] = useState(false);
+
+  // For OakView: Update virtual time from provider
+  useEffect(() => {
+    if (!USE_OAKVIEW_CHART || !providerRef?.current) return;
+
+    const interval = setInterval(() => {
+      if (providerRef.current?.isPlaying && !providerRef.current?.isPaused) {
+        const virtualTime = providerRef.current.getVirtualTime();
+        setCurrentTime(virtualTime);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [providerRef]);
 
   const handleTick = useCallback((tick, virtualTime) => {
     setError(null);
@@ -68,7 +83,56 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
 
   const handlePlay = useCallback(async () => {
     if (!currentSession) return;
-    // If paused, resume instead of restarting
+
+    // OakView mode
+    if (USE_OAKVIEW_CHART && providerRef?.current) {
+      const provider = providerRef.current;
+      
+      // If paused, resume
+      if (provider.isPaused) {
+        console.log('▶️ Resuming playback');
+        provider.resume();
+        setStatus('connected');
+        return;
+      }
+      
+      // If already playing, do nothing
+      if (provider.isPlaying) return;
+      
+      // Start streaming
+      console.log('▶️ Starting OakView playback');
+      setStatus('connected');
+      
+      // Subscribe to tick updates
+      provider.subscribe(currentSession.id.split('-')[0], '1', (bar) => {
+        // Update sessionData with tick info
+        if (bar._tick) {
+          const tick = bar._tick;
+          setSessionData(prev => ({
+            ...prev,
+            quote: {
+              t: tick.adjustedTimestamp,
+              bid: parseFloat(tick.bid_price),
+              ask: parseFloat(tick.ask_price),
+              bidSize: parseFloat(tick.bid_size),
+              askSize: parseFloat(tick.ask_size),
+              timestamp: tick.timestamp,
+              nbbo: true,
+              exchanges: tick.exchanges || []
+            },
+            stats: {
+              ...prev.stats,
+              quoteCount: (prev.stats?.quoteCount || 0) + 1
+            }
+          }));
+        }
+      });
+      
+      provider.startStreaming();
+      return;
+    }
+
+    // Legacy mode - use useTickPlayer
     if (isPlaying && isPaused) {
       return handlePause(); // This will resume
     }
@@ -111,9 +175,26 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
       setStatus('error');
       onLoadingChange?.(false);
     }
-  }, [currentSession, tickData, isPlaying, isPaused, loadAndPlay, onLoadingChange, setSessionData]);
+  }, [currentSession, tickData, isPlaying, isPaused, loadAndPlay, onLoadingChange, setSessionData, providerRef]);
 
   const handlePause = () => {
+    // OakView mode
+    if (USE_OAKVIEW_CHART && providerRef?.current) {
+      const provider = providerRef.current;
+      
+      if (provider.isPaused) {
+        console.log('▶️ Resuming playback');
+        provider.resume();
+        setStatus('connected');
+      } else {
+        console.log('⏸️ Pausing playback');
+        provider.pause();
+        setStatus('paused');
+      }
+      return;
+    }
+
+    // Legacy mode
     if (!isPlaying) return;
 
     if (isPaused) {
@@ -128,6 +209,26 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
   };
 
   const handleStop = () => {
+    // OakView mode
+    if (USE_OAKVIEW_CHART && providerRef?.current) {
+      const provider = providerRef.current;
+      
+      if (!provider.isPlaying) return;
+      
+      console.log('⏹️ Stopping playback');
+      provider.reset();
+      setStatus('disconnected');
+      setError(null);
+      onLoadingChange?.(false);
+      setSessionData(prev => ({
+        ...prev,
+        quote: null,
+        stats: { quoteCount: 0, sessionMeta: null }
+      }));
+      return;
+    }
+
+    // Legacy mode
     if (!isPlaying) return;
 
     console.log('⏹️ Stopping playback');
@@ -144,6 +245,16 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
 
   const handleSpeedChange = (newSpeed) => {
     const speedValue = parseFloat(newSpeed);
+    
+    // OakView mode
+    if (USE_OAKVIEW_CHART && providerRef?.current) {
+      const provider = providerRef.current;
+      provider.setSpeed(speedValue);
+      console.log('⚡ OakView speed changed to:', speedValue);
+      return;
+    }
+
+    // Legacy mode
     changeSpeed(speedValue);
     if (isPlaying) {
       console.log('⚡ Changing speed to:', speedValue);
@@ -162,9 +273,34 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
     { value: 100, label: '100x' },
   ];
 
+  // Track OakView playback state
+  const [oakviewPlaying, setOakviewPlaying] = useState(false);
+  const [oakviewPaused, setOakviewPaused] = useState(false);
+  const [oakviewSpeed, setOakviewSpeed] = useState(1);
+
+  // Poll OakView provider state
+  useEffect(() => {
+    if (!USE_OAKVIEW_CHART || !providerRef?.current) return;
+
+    const interval = setInterval(() => {
+      if (providerRef.current) {
+        setOakviewPlaying(providerRef.current.isPlaying);
+        setOakviewPaused(providerRef.current.isPaused);
+        setOakviewSpeed(providerRef.current.speed);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [providerRef]);
+
+  // Determine current playback state
+  const currentIsPlaying = USE_OAKVIEW_CHART ? oakviewPlaying : isPlaying;
+  const currentIsPaused = USE_OAKVIEW_CHART ? oakviewPaused : isPaused;
+  const currentSpeed = USE_OAKVIEW_CHART ? oakviewSpeed : speed;
+
   // Show tooltip when session is selected but not playing
   useEffect(() => {
-    if (currentSession && !isPlaying && status === 'disconnected') {
+    if (currentSession && !currentIsPlaying && status === 'disconnected') {
       setShowPlayTooltip(true);
       // Hide tooltip after 5 seconds
       const timer = setTimeout(() => {
@@ -188,12 +324,12 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
         {/* Play/Pause Button with Tooltip */}
         <div className="relative">
           <button
-            onClick={isPlaying && !isPaused ? handlePause : handlePlay}
+            onClick={currentIsPlaying && !currentIsPaused ? handlePause : handlePlay}
             disabled={status === 'loading'}
             className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2A2E39] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[#B2B5BE] hover:text-white"
-            title={isPlaying && !isPaused ? 'Pause' : 'Play'}
+            title={currentIsPlaying && !currentIsPaused ? 'Pause' : 'Play'}
           >
-            {isPlaying && !isPaused ? (
+            {currentIsPlaying && !currentIsPaused ? (
               // Pause Icon
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="4" y="3" width="3" height="10" rx="1"/>
@@ -224,7 +360,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
         {/* Stop Button */}
         <button
           onClick={handleStop}
-          disabled={!isPlaying}
+          disabled={!currentIsPlaying}
           className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2A2E39] transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-[#B2B5BE] hover:text-white"
           title="Stop"
         >
@@ -241,7 +377,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
             onClick={() => setShowSpeedMenu(!showSpeedMenu)}
             className="h-7 px-3 text-[12px] font-medium rounded transition-colors bg-[#2A2E39] text-white hover:bg-[#363A45] flex items-center gap-1"
           >
-            <span>{speed}x</span>
+            <span>{currentSpeed}x</span>
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -256,7 +392,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
                     key={option.value}
                     onClick={() => { handleSpeedChange(option.value); setShowSpeedMenu(false); }}
                     className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#2A2E39] ${
-                      speed === option.value ? 'bg-[#2A2E39] text-white' : 'text-[#B2B5BE]'
+                      currentSpeed === option.value ? 'bg-[#2A2E39] text-white' : 'text-[#B2B5BE]'
                     }`}
                   >
                     {option.label}

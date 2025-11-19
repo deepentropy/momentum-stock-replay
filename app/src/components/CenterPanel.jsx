@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ControlsBar from "./ControlsBar";
 import ChartArea from "./ChartArea";
+import ChartContainer from "./ChartContainer";
 import SessionSearchModal from "./SessionSearchModal";
 import { api } from "../utils/api";
+import { USE_OAKVIEW_CHART } from "../config";
 
 export default function CenterPanel({ currentSession, sessionData, setSessionData, isLoading, onLoadingChange, onSelectSession, chartType, setChartType, timeframe, setTimeframe, onOpenSettings }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const chartRef = useRef(null);
+  const providerRef = useRef(null); // For OakView provider
 
   const chartTypeIcons = {
     line: (
@@ -223,13 +227,26 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
 
       {/* Chart Area */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        <ChartArea
-          sessionData={sessionData}
-          isLoading={isLoading}
-          chartType={chartType}
-          timeframe={timeframe}
-          previewData={previewData}
-        />
+        {USE_OAKVIEW_CHART ? (
+          <ChartContainer
+            ref={chartRef}
+            currentSession={currentSession}
+            sessionData={sessionData}
+            isLoading={isLoading}
+            chartType={chartType}
+            timeframe={timeframe}
+            providerRef={providerRef}
+          />
+        ) : (
+          <ChartArea
+            ref={chartRef}
+            sessionData={sessionData}
+            isLoading={isLoading}
+            chartType={chartType}
+            timeframe={timeframe}
+            previewData={previewData}
+          />
+        )}
       </div>
 
       {/* Controls Bar */}
@@ -240,6 +257,8 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
             sessionData={sessionData}
             setSessionData={setSessionData}
             onLoadingChange={onLoadingChange}
+            providerRef={USE_OAKVIEW_CHART ? providerRef : null}
+            chartRef={chartRef}
           />
         </div>
       )}

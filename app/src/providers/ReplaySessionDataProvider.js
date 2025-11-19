@@ -7,7 +7,7 @@
  */
 
 import { OakViewDataProvider } from 'oakview';
-import * as api from '../utils/api.js';
+import { api } from '../utils/api.js';
 
 class ReplaySessionDataProvider extends OakViewDataProvider {
   constructor() {
