@@ -40,7 +40,6 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     }
 
     const currentTick = ticks[currentIndex];
-    const nextTick = ticks[currentIndex + 1];
 
     if (!lastTickTimeRef.current) {
       lastTickTimeRef.current = timestamp;
@@ -48,19 +47,9 @@ export function useTickPlayer(onTick, onInit, onEnd) {
 
     const elapsed = timestamp - lastTickTimeRef.current;
 
-    // Calculate delay between current and next tick using adjustedTimestamp
-    let delay = 0;
-    if (nextTick && currentTick.adjustedTimestamp && nextTick.adjustedTimestamp) {
-      const timeDiff = (nextTick.adjustedTimestamp - currentTick.adjustedTimestamp) * 1000; // Convert to ms
-      delay = timeDiff / speedRef.current;
-
-      // Cap maximum delay at 1000ms to prevent frozen playback
-      if (delay > 1000) {
-        delay = 1000;
-      }
-    } else {
-      delay = 10 / speedRef.current; // Default 10ms if no timestamp
-    }
+    // Fixed delay regardless of data timestamps - normalized playback
+    // Base delay is 100ms (10 ticks per second), adjusted by speed
+    const delay = 100 / speedRef.current;
 
     if (elapsed >= delay) {
       // Send tick data
