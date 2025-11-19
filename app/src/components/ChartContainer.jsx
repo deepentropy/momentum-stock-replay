@@ -7,7 +7,7 @@
 
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
-import { OakViewChart } from 'oakview';
+import { OakViewChart } from 'oakview';  // This imports both basic chart and chart-ui
 
 const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
   const chartContainerRef = useRef(null);
@@ -43,34 +43,34 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
     if (!chartContainerRef.current || initializingRef.current) return;
 
     // Check if chart element already exists
-    const existingChart = chartContainerRef.current.querySelector('oakview-chart');
+    const existingChart = chartContainerRef.current.querySelector('oakview-chart-ui');
     if (existingChart) {
-      console.log('✓ OakView chart already exists, reusing it');
+      console.log('✓ OakView chart-ui already exists, reusing it');
       chartRef.current = existingChart;
       setChartReady(true);
       return;
     }
 
     initializingRef.current = true;
-    console.log('📊 Initializing OakView chart...');
+    console.log('📊 Initializing OakView chart-ui...');
 
-    // OakViewChart is imported, so Web Component should be registered
-    customElements.whenDefined('oakview-chart').then(() => {
-      console.log('✓ oakview-chart Web Component is defined');
+    // Wait for oakview-chart-ui Web Component to be defined
+    customElements.whenDefined('oakview-chart-ui').then(() => {
+      console.log('✓ oakview-chart-ui Web Component is defined');
       
       // Double-check it wasn't created in the meantime
-      if (chartContainerRef.current?.querySelector('oakview-chart')) {
+      if (chartContainerRef.current?.querySelector('oakview-chart-ui')) {
         console.log('⚠️ Chart was created while waiting, using existing one');
-        chartRef.current = chartContainerRef.current.querySelector('oakview-chart');
+        chartRef.current = chartContainerRef.current.querySelector('oakview-chart-ui');
         setChartReady(true);
         return;
       }
       
-      // Create the chart element
-      const chartElement = document.createElement('oakview-chart');
+      // Create the chart-ui element (with toolbar)
+      const chartElement = document.createElement('oakview-chart-ui');
       chartElement.setAttribute('theme', 'dark');
-      chartElement.setAttribute('width', '100%');
-      chartElement.setAttribute('height', '100%');
+      chartElement.setAttribute('show-toolbar', 'true');
+      chartElement.setAttribute('hide-sidebar', 'true'); // Hide sidebar, keep toolbar
       
       if (chartContainerRef.current) {
         chartContainerRef.current.appendChild(chartElement);
@@ -78,12 +78,12 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
         // Use requestAnimationFrame to ensure element is fully connected
         requestAnimationFrame(() => {
-          console.log('✓ OakView chart element connected');
+          console.log('✓ OakView chart-ui element connected');
           setChartReady(true);
         });
       }
     }).catch(error => {
-      console.error('❌ Failed to initialize OakView chart:', error);
+      console.error('❌ Failed to initialize OakView chart-ui:', error);
       initializingRef.current = false;
     });
 
@@ -132,56 +132,13 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
         console.log('✓ OakView: Session metadata:', metadata);
 
-        // Get the underlying lightweight-charts instance
-        const lwChart = chartRef.current.getChart();
-        console.log('✓ OakView: Got chart instance:', lwChart);
-
-        // Clear existing series first
-        if (chartRef.current.clearSeries) {
-          chartRef.current.clearSeries();
-          console.log('✓ OakView: Cleared existing series');
-        }
-
-        // Create candlestick series with proper options
-        console.log('📊 OakView: Adding candlestick series...');
-        const candleSeries = chartRef.current.addCandlestickSeries([], {
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          borderVisible: false,
-          wickUpColor: '#26a69a',
-          wickDownColor: '#ef5350',
-        });
-        console.log('✓ OakView: Added candlestick series:', candleSeries);
-        
-        // Create line series for bid/ask/mid
-        const bidSeries = chartRef.current.addLineSeries([], {
-          color: '#26a69a',
-          lineWidth: 1,
-          title: 'Bid'
-        });
-
-        const askSeries = chartRef.current.addLineSeries([], {
-          color: '#ef5350',
-          lineWidth: 1,
-          title: 'Ask'
-        });
-
-        const midSeries = chartRef.current.addLineSeries([], {
-          color: '#2962ff',
-          lineWidth: 2,
-          title: 'Mid'
-        });
-        console.log('✓ OakView: Added line series (bid/ask/mid)');
-
         // Load preview data (historical)
         const previewBars = await provider.fetchHistorical(metadata.symbol, '1');
         
-        // Display preview
-        console.log('📊 OakView: Displaying preview:', previewBars.length, 'bars');
-        candleSeries.setData(previewBars);
+        // Display preview using oakview-chart-ui's simple API
+        console.log('📊 OakView: Setting data:', previewBars.length, 'bars');
+        chartRef.current.setData(previewBars);
         
-        // Fit content
-        lwChart.timeScale().fitContent();
         console.log('✓ OakView: Chart ready with preview data');
 
       } catch (error) {
