@@ -8,7 +8,7 @@
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
 // Import OakViewChartUI to get the version with toolbar
-import 'oakview/src/oakview-chart-ui.js';
+import { OakViewChartUI } from 'oakview';
 
 const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
   const chartContainerRef = useRef(null);
