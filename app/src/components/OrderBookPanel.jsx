@@ -118,6 +118,18 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
       return { bids: [], asks: [] };
     }
 
+    // Debug: Log raw exchange data
+    if (quote.exchanges.length > 0 && Math.random() < 0.01) { // Log ~1% of the time
+      console.log('📊 Raw exchange data:', quote.exchanges.map(ex => ({
+        publisher_id: ex.publisher_id,
+        name: getExchangeName(ex.publisher_id),
+        bid: ex.bid_price,
+        ask: ex.ask_price,
+        bid_size: ex.bid_size,
+        ask_size: ex.ask_size
+      })));
+    }
+
     // V3 format: Use real multi-exchange data from quote.exchanges
     const bids = quote.exchanges
       .filter(ex => {
