@@ -84,7 +84,7 @@ export const api = {
     }
 
     // Detect version and parse accordingly
-    const dataView = new DataView(decompressed.buffer);
+    const dataView = new DataView(decompressed.buffer, decompressed.byteOffset, decompressed.byteLength);
     const version = dataView.getUint16(4, true); // Version is at offset 4, 2 bytes
 
     console.log(`📦 Detected binary format version: ${version}`);
