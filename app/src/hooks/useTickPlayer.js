@@ -8,16 +8,15 @@ export function useTickPlayer(onTick, onInit, onEnd) {
 
   const ticksRef = useRef([]);
   const currentIndexRef = useRef(0);
-  const animationFrameRef = useRef(null);
-  const lastTickTimeRef = useRef(0);
+  const intervalRef = useRef(null);
   const sessionMetaRef = useRef(null);
   const isPausedRef = useRef(false);
   const speedRef = useRef(1);
 
   const stopPlayback = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
     setIsPlaying(false);
     setIsPaused(false);
@@ -26,8 +25,7 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     setProgress(0);
   }, []);
 
-  const playTicks = useCallback((timestamp) => {
-    // Use ref instead of closure to avoid stale values
+  const playNextTick = useCallback(() => {
     if (isPausedRef.current) return;
 
     const ticks = ticksRef.current;
@@ -40,27 +38,12 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     }
 
     const currentTick = ticks[currentIndex];
+    
+    // Send tick data
+    onTick?.(currentTick);
 
-    if (!lastTickTimeRef.current) {
-      lastTickTimeRef.current = timestamp;
-    }
-
-    const elapsed = timestamp - lastTickTimeRef.current;
-
-    // Fixed delay regardless of data timestamps - normalized playback
-    // Base delay is 100ms (10 ticks per second), adjusted by speed
-    const delay = 100 / speedRef.current;
-
-    if (elapsed >= delay) {
-      // Send tick data
-      onTick?.(currentTick);
-
-      currentIndexRef.current++;
-      lastTickTimeRef.current = timestamp;
-      setProgress((currentIndexRef.current / ticks.length) * 100);
-    }
-
-    animationFrameRef.current = requestAnimationFrame(playTicks);
+    currentIndexRef.current++;
+    setProgress((currentIndexRef.current / ticks.length) * 100);
   }, [onTick, onEnd, stopPlayback]);
 
   const loadAndPlay = useCallback(async (sessionId, tickData) => {
@@ -68,7 +51,6 @@ export function useTickPlayer(onTick, onInit, onEnd) {
 
     ticksRef.current = tickData;
     currentIndexRef.current = 0;
-    lastTickTimeRef.current = 0;
 
     // Extract metadata
     const meta = {
@@ -85,15 +67,18 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     setIsPaused(false);
     isPausedRef.current = false;
 
-    animationFrameRef.current = requestAnimationFrame(playTicks);
-  }, [playTicks, stopPlayback, onInit]);
+    // Fixed delay: 100ms per tick (10 ticks/second), adjusted by speed
+    const intervalMs = 100 / speedRef.current;
+    
+    intervalRef.current = setInterval(playNextTick, intervalMs);
+  }, [playNextTick, stopPlayback, onInit]);
 
   const pause = useCallback(() => {
     setIsPaused(true);
     isPausedRef.current = true;
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
   }, []);
 
@@ -101,20 +86,27 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     if (!isPlaying) return;
     setIsPaused(false);
     isPausedRef.current = false;
-    lastTickTimeRef.current = 0;
-    animationFrameRef.current = requestAnimationFrame(playTicks);
-  }, [isPlaying, playTicks]);
+    
+    const intervalMs = 100 / speedRef.current;
+    intervalRef.current = setInterval(playNextTick, intervalMs);
+  }, [isPlaying, playNextTick]);
 
   const changeSpeed = useCallback((newSpeed) => {
     setSpeed(newSpeed);
     speedRef.current = newSpeed;
-    lastTickTimeRef.current = 0; // Reset timing
-  }, []);
+    
+    // Restart interval with new speed if playing
+    if (isPlaying && !isPausedRef.current && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      const intervalMs = 100 / newSpeed;
+      intervalRef.current = setInterval(playNextTick, intervalMs);
+    }
+  }, [isPlaying, playNextTick]);
 
   useEffect(() => {
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
     };
   }, []);
