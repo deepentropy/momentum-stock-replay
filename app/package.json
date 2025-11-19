@@ -13,6 +13,7 @@
   "dependencies": {
     "@deepentropy/oakscriptjs": "npm:@jsr/deepentropy__oakscriptjs@^0.1.0",
     "lightweight-charts": "^5.0.9",
+    "oakview": "file:../../oakview",
     "pako": "^2.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
