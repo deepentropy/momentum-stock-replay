@@ -136,12 +136,22 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
         const lwChart = chartRef.current.getChart();
         console.log('✓ OakView: Got chart instance:', lwChart);
 
-        // Clear existing series
-        chartRef.current.clearSeries();
+        // Clear existing series first
+        if (chartRef.current.clearSeries) {
+          chartRef.current.clearSeries();
+          console.log('✓ OakView: Cleared existing series');
+        }
 
-        // Create candlestick series
-        const candleSeries = chartRef.current.addCandlestickSeries();
-        console.log('✓ OakView: Added candlestick series');
+        // Create candlestick series with proper options
+        console.log('📊 OakView: Adding candlestick series...');
+        const candleSeries = chartRef.current.addCandlestickSeries([], {
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderVisible: false,
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+        });
+        console.log('✓ OakView: Added candlestick series:', candleSeries);
         
         // Create line series for bid/ask/mid
         const bidSeries = chartRef.current.addLineSeries([], {
