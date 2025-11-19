@@ -12,6 +12,7 @@ export function useTickPlayer(onTick, onInit, onEnd) {
   const sessionMetaRef = useRef(null);
   const isPausedRef = useRef(false);
   const speedRef = useRef(1);
+  const virtualTimeRef = useRef(0); // Virtual wall-clock time in seconds
 
   const stopPlayback = useCallback(() => {
     if (intervalRef.current) {
@@ -22,6 +23,7 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     setIsPaused(false);
     isPausedRef.current = false;
     currentIndexRef.current = 0;
+    virtualTimeRef.current = 0;
     setProgress(0);
   }, []);
 
@@ -39,10 +41,12 @@ export function useTickPlayer(onTick, onInit, onEnd) {
 
     const currentTick = ticks[currentIndex];
     
-    // Send tick data
-    onTick?.(currentTick);
+    // Send tick data with virtual time
+    onTick?.(currentTick, virtualTimeRef.current);
 
     currentIndexRef.current++;
+    // Increment virtual time by 0.1 seconds (100ms) per tick
+    virtualTimeRef.current += 0.1;
     setProgress((currentIndexRef.current / ticks.length) * 100);
   }, [onTick, onEnd, stopPlayback]);
 
@@ -61,6 +65,14 @@ export function useTickPlayer(onTick, onInit, onEnd) {
     };
 
     sessionMetaRef.current = meta;
+    
+    // Initialize virtual time from first tick's timestamp
+    const firstTick = tickData[0];
+    if (firstTick) {
+      virtualTimeRef.current = firstTick.adjustedTimestamp || 
+                               (new Date(firstTick.timestamp || firstTick.time).getTime() / 1000);
+    }
+    
     onInit?.(meta);
 
     setIsPlaying(true);

@@ -10,14 +10,15 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
   const [currentTime, setCurrentTime] = useState(null);
   const [showPlayTooltip, setShowPlayTooltip] = useState(false);
 
-  const handleTick = useCallback((tick) => {
+  const handleTick = useCallback((tick, virtualTime) => {
     setError(null);
 
-    // V3 format already has NBBO calculated and proper timestamps
-    const unixTime = tick.adjustedTimestamp;
+    // Use virtual time for clock display (increments by 0.1s per tick)
+    // This ensures the timer shows continuous wall-clock progression
+    setCurrentTime(virtualTime);
 
-    // Update current time for clock display
-    setCurrentTime(unixTime);
+    // Use actual data timestamp for chart
+    const unixTime = tick.adjustedTimestamp;
 
     setSessionData(prev => ({
       ...prev,  // Preserve level2Data
