@@ -7,7 +7,8 @@
 
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
-import { OakViewChart } from 'oakview';  // This imports both basic chart and chart-ui
+// Import OakViewChartUI to get the version with toolbar
+import 'oakview/src/oakview-chart-ui.js';
 
 const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
   const chartContainerRef = useRef(null);
@@ -43,31 +44,31 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
     if (!chartContainerRef.current || initializingRef.current) return;
 
     // Check if chart element already exists
-    const existingChart = chartContainerRef.current.querySelector('oakview-chart-ui');
+    const existingChart = chartContainerRef.current.querySelector('oakview-chart');
     if (existingChart) {
-      console.log('✓ OakView chart-ui already exists, reusing it');
+      console.log('✓ OakView chart already exists, reusing it');
       chartRef.current = existingChart;
       setChartReady(true);
       return;
     }
 
     initializingRef.current = true;
-    console.log('📊 Initializing OakView chart-ui...');
+    console.log('📊 Initializing OakView chart (with toolbar)...');
 
-    // Wait for oakview-chart-ui Web Component to be defined
-    customElements.whenDefined('oakview-chart-ui').then(() => {
-      console.log('✓ oakview-chart-ui Web Component is defined');
+    // Wait for oakview-chart Web Component to be defined
+    customElements.whenDefined('oakview-chart').then(() => {
+      console.log('✓ oakview-chart Web Component is defined');
       
       // Double-check it wasn't created in the meantime
-      if (chartContainerRef.current?.querySelector('oakview-chart-ui')) {
+      if (chartContainerRef.current?.querySelector('oakview-chart')) {
         console.log('⚠️ Chart was created while waiting, using existing one');
-        chartRef.current = chartContainerRef.current.querySelector('oakview-chart-ui');
+        chartRef.current = chartContainerRef.current.querySelector('oakview-chart');
         setChartReady(true);
         return;
       }
       
-      // Create the chart-ui element (with toolbar)
-      const chartElement = document.createElement('oakview-chart-ui');
+      // Create the chart element (this will be the UI version with toolbar)
+      const chartElement = document.createElement('oakview-chart');
       chartElement.setAttribute('theme', 'dark');
       chartElement.setAttribute('show-toolbar', 'true');
       chartElement.setAttribute('hide-sidebar', 'true'); // Hide sidebar, keep toolbar
@@ -78,12 +79,12 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
         // Use requestAnimationFrame to ensure element is fully connected
         requestAnimationFrame(() => {
-          console.log('✓ OakView chart-ui element connected');
+          console.log('✓ OakView chart element connected (with toolbar)');
           setChartReady(true);
         });
       }
     }).catch(error => {
-      console.error('❌ Failed to initialize OakView chart-ui:', error);
+      console.error('❌ Failed to initialize OakView chart:', error);
       initializingRef.current = false;
     });
 
