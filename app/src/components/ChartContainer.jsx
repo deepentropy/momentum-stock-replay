@@ -41,6 +41,15 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Check if chart element already exists (React StrictMode double-mount)
+    if (chartContainerRef.current.querySelector('oakview-chart')) {
+      console.log('✓ OakView chart already exists (StrictMode)');
+      const existingChart = chartContainerRef.current.querySelector('oakview-chart');
+      chartRef.current = existingChart;
+      setChartReady(true);
+      return;
+    }
+
     console.log('📊 Initializing OakView chart...');
 
     // OakViewChart is imported, so Web Component should be registered
@@ -69,10 +78,8 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
     });
 
     return () => {
-      // Cleanup
-      if (chartContainerRef.current) {
-        chartContainerRef.current.innerHTML = '';
-      }
+      // Cleanup - but don't remove if React is just re-mounting
+      // Only clear the ref
       chartRef.current = null;
       setChartReady(false);
     };
@@ -80,6 +87,12 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
   // Load session when currentSession changes
   useEffect(() => {
+    console.log('🔍 Session effect triggered:', { 
+      chartReady, 
+      currentSession: currentSession?.id, 
+      hasChartRef: !!chartRef.current 
+    });
+    
     if (!chartReady || !currentSession || !chartRef.current) {
       console.log('⏳ Waiting for chart ready...', { chartReady, currentSession: !!currentSession, chartRef: !!chartRef.current });
       return;
