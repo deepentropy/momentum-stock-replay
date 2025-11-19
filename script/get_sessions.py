@@ -41,6 +41,21 @@ class Config:
         'XBOS.ITCH',     # NASDAQ BX
         'XPSX.ITCH',     # NASDAQ PSX
     ]
+    
+    # Dataset to Publisher ID mapping (Databento standard IDs)
+    # Databento's raw data uses venue-specific publisher IDs, so we need to map them
+    # to the standard consolidated feed publisher IDs for consistency
+    DATASET_TO_PUBLISHER_ID = {
+        'XNAS.ITCH': 1,    # NASDAQ
+        'XNYS.PILLAR': 2,  # NYSE
+        'ARCX.PILLAR': 3,  # NYSE Arca
+        'BATS.PITCH': 4,   # Cboe BZX (formerly BATS)
+        'IEXG.TOPS': 5,    # IEX
+        'XBOS.ITCH': 6,    # NASDAQ BX (Boston)
+        'BATY.PITCH': 9,   # Cboe BYX (formerly BATS Y)
+        'EDGA.PITCH': 38,  # Cboe EDGA
+        'XPSX.ITCH': 43,   # NASDAQ PSX
+    }
 
     # Compression Settings
     PRICE_SCALE = 100_000
@@ -469,8 +484,16 @@ def fetch_mbp1_multi_exchange(fetcher, symbol, start_date, end_date, output_dir)
             print(f"  [SUCCESS] {len(df):,} quotes from {dataset}")
 
             if 'publisher_id' in df.columns and not df.empty:
-                pub_ids = df['publisher_id'].unique()
-                print(f"  Publisher IDs: {pub_ids}")
+                pub_ids_original = df['publisher_id'].unique()
+                print(f"  Original Publisher IDs: {pub_ids_original}")
+                
+                # Remap to standard Databento publisher IDs
+                if dataset in Config.DATASET_TO_PUBLISHER_ID:
+                    correct_pub_id = Config.DATASET_TO_PUBLISHER_ID[dataset]
+                    df['publisher_id'] = correct_pub_id
+                    print(f"  Remapped to Publisher ID: {correct_pub_id}")
+                else:
+                    print(f"  [WARNING] No mapping found for {dataset}, keeping original IDs")
 
             all_data.append(df)
 
