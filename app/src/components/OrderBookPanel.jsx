@@ -1,12 +1,14 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { usePositionManager } from "../hooks/usePositionManager";
 import { useSettings } from "../contexts/SettingsContext";
+import { useOrderBook } from "../hooks/useOrderBook";
 
-export default function OrderBookPanel({ sessionData, onAddMarker }) {
+export default function OrderBookPanel({ sessionData, onAddMarker, onPositionChange }) {
   const { quote, stats } = sessionData;
   const [positionSize, setPositionSize] = useState(100);
   const { positions, trades, summary, buy, sell, reset, updateCurrentPrice } = usePositionManager();
   const { settings } = useSettings();
+  const { updateOrderBook, clearOrderBook, getOrderBook } = useOrderBook();
 
   // Update current price for P/L calculations
   useEffect(() => {
@@ -15,13 +17,28 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     }
   }, [quote, updateCurrentPrice]);
 
-  // Reset positions when session resets
+  // Notify parent about position changes
+  useEffect(() => {
+    if (onPositionChange) {
+      onPositionChange(summary);
+    }
+  }, [summary, onPositionChange]);
+
+  // Update order book state with exchange snapshots from each tick
+  useEffect(() => {
+    if (quote && quote.exchanges) {
+      updateOrderBook(quote.exchanges);
+    }
+  }, [quote, updateOrderBook]);
+
+  // Reset positions and order book when session resets
   useEffect(() => {
     const quoteCount = stats?.quoteCount || 0;
     if (quoteCount === 0) {
       reset();
+      clearOrderBook();
     }
-  }, [stats?.quoteCount, reset]);
+  }, [stats?.quoteCount, reset, clearOrderBook]);
 
   const handleBuy = () => {
     if (!quote) return;
@@ -112,53 +129,35 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
     return publisherMap[publisherId] || `EX${publisherId}`;
   };
 
-  // Use real multi-exchange order book data from V3 format
+  // Use real multi-exchange order book data with stateful tracking
   const orderBookData = useMemo(() => {
-    if (!quote || !quote.exchanges || quote.exchanges.length === 0) {
+    if (!quote) {
       return { bids: [], asks: [] };
     }
 
-    // Debug: Log raw exchange data
-    if (quote.exchanges.length > 0 && Math.random() < 0.01) { // Log ~1% of the time
-      console.log('📊 Raw exchange data:', quote.exchanges.map(ex => ({
-        publisher_id: ex.publisher_id,
-        name: getExchangeName(ex.publisher_id),
-        bid: ex.bid_price,
-        ask: ex.ask_price,
-        bid_size: ex.bid_size,
-        ask_size: ex.ask_size
-      })));
+    // Get current order book state (accumulated from all ticks)
+    const { bids, asks } = getOrderBook(settings.orderBookMinSize);
+
+    // Debug: Log order book size
+    if (Math.random() < 0.05) { // 5% of the time
+      console.log(`📊 Order Book: ${bids.length} bids, ${asks.length} asks (minSize=${settings.orderBookMinSize})`);
     }
 
-    // V3 format: Use real multi-exchange data from quote.exchanges
-    const bids = quote.exchanges
-      .filter(ex => {
-        const bidPrice = parseFloat(ex.bid_price);
-        const bidSize = parseFloat(ex.bid_size);
-        return bidPrice > 0 && bidSize >= settings.orderBookMinSize;
-      })
-      .map(ex => ({
-        maker: getExchangeName(ex.publisher_id),
-        price: parseFloat(ex.bid_price),
-        size: parseFloat(ex.bid_size)
-      }))
-      .sort((a, b) => b.price - a.price); // Sort by price descending (best bid first)
+    // Map to include exchange names
+    const bidsWithNames = bids.map(b => ({
+      maker: getExchangeName(b.publisher_id),
+      price: b.price,
+      size: b.size
+    }));
 
-    const asks = quote.exchanges
-      .filter(ex => {
-        const askPrice = parseFloat(ex.ask_price);
-        const askSize = parseFloat(ex.ask_size);
-        return askPrice > 0 && askSize >= settings.orderBookMinSize;
-      })
-      .map(ex => ({
-        maker: getExchangeName(ex.publisher_id),
-        price: parseFloat(ex.ask_price),
-        size: parseFloat(ex.ask_size)
-      }))
-      .sort((a, b) => a.price - b.price); // Sort by price ascending (best ask first)
+    const asksWithNames = asks.map(a => ({
+      maker: getExchangeName(a.publisher_id),
+      price: a.price,
+      size: a.size
+    }));
 
-    return { bids, asks };
-  }, [quote, settings.orderBookMinSize]);
+    return { bids: bidsWithNames, asks: asksWithNames };
+  }, [quote, getOrderBook, settings.orderBookMinSize]);
 
   // Assign colors based on unique price levels
   const getPriceLevelColors = () => {

@@ -15,6 +15,7 @@ export default function App() {
       sessionMeta: null,
     }
   });
+  const [positionSummary, setPositionSummary] = useState(null);
 
   const chartRef = useRef(null);
 
@@ -26,6 +27,10 @@ export default function App() {
     if (chartRef.current && chartRef.current.addMarker) {
       chartRef.current.addMarker(marker);
     }
+  };
+
+  const handlePositionChange = (summary) => {
+    setPositionSummary(summary);
   };
 
   // Global keyboard shortcut for session search (Ctrl+K)
@@ -59,6 +64,7 @@ export default function App() {
             timeframe={timeframe}
             setTimeframe={setTimeframe}
             onOpenSettings={() => setSettingsOpen(true)}
+            positionSummary={positionSummary}
           />
         </div>
 
@@ -66,6 +72,7 @@ export default function App() {
           <OrderBookPanel
             sessionData={sessionData}
             onAddMarker={handleAddMarker}
+            onPositionChange={handlePositionChange}
           />
         </div>
 

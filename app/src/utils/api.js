@@ -352,7 +352,7 @@ function parseBinaryDataV3(buffer) {
       offset += 4;
 
       exchanges.push({
-        publisher_id: publisherMap[publisherIdx],
+        publisher_id: publisherMap[publisherIdx] || publisherIdx, // Use index if not in map
         publisher_index: publisherIdx,
         bid_price: bid.toFixed(5),
         ask_price: ask.toFixed(5),

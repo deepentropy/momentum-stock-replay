@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, forwardRef } from "react";
 import ControlsBar from "./ControlsBar";
 import ChartArea from "./ChartArea";
 import SessionSearchModal from "./SessionSearchModal";
 import { api } from "../utils/api";
 
-export default function CenterPanel({ currentSession, sessionData, setSessionData, isLoading, onLoadingChange, onSelectSession, chartType, setChartType, timeframe, setTimeframe, onOpenSettings }) {
+const CenterPanel = forwardRef(({ currentSession, sessionData, setSessionData, isLoading, onLoadingChange, onSelectSession, chartType, setChartType, timeframe, setTimeframe, onOpenSettings, positionSummary }, ref) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
@@ -224,11 +224,13 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
       {/* Chart Area */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ChartArea
+          ref={ref}
           sessionData={sessionData}
           isLoading={isLoading}
           chartType={chartType}
           timeframe={timeframe}
           previewData={previewData}
+          positionSummary={positionSummary}
         />
       </div>
 
@@ -253,4 +255,8 @@ export default function CenterPanel({ currentSession, sessionData, setSessionDat
       />
     </div>
   );
-}
+});
+
+CenterPanel.displayName = 'CenterPanel';
+
+export default CenterPanel;
