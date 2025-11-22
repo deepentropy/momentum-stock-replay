@@ -164,48 +164,64 @@ class NBBOResampler:
             print(f"  [WARNING] No data in time bins")
             return pd.DataFrame(), {}
 
-        grouped = df.groupby(['time_bin', 'publisher_id']).last().reset_index()
-
+        # 1) Agrégation par bin / publisher comme tu le fais
+        grouped = df.groupby(['time_bin', 'publisher_id']).last()
         grouped['bid'] = grouped['bid_px_00']
         grouped['ask'] = grouped['ask_px_00']
         grouped['bid_size'] = grouped['bid_sz_00']
         grouped['ask_size'] = grouped['ask_sz_00']
-
         grouped = grouped[(grouped['bid'] > 0) & (grouped['ask'] > 0)]
 
-        if grouped.empty:
-            print(f"  [WARNING] No valid quotes after filtering")
-            return pd.DataFrame(), {}
-
-        def get_best_bid(group):
-            idx = group['bid'].idxmax()
-            return pd.Series({
-                'nbbo_bid': group.loc[idx, 'bid'],
-                'nbbo_bid_size': group.loc[idx, 'bid_size'],
-                'nbbo_bid_publisher': group.loc[idx, 'publisher_id']
-            })
-
-        def get_best_ask(group):
-            idx = group['ask'].idxmin()
-            return pd.Series({
-                'nbbo_ask': group.loc[idx, 'ask'],
-                'nbbo_ask_size': group.loc[idx, 'ask_size'],
-                'nbbo_ask_publisher': group.loc[idx, 'publisher_id']
-            })
-
-        nbbo_bids = grouped.groupby('time_bin', group_keys=False).apply(get_best_bid, include_groups=False)
-        nbbo_asks = grouped.groupby('time_bin', group_keys=False).apply(get_best_ask, include_groups=False)
-
-        nbbo = nbbo_bids.join(nbbo_asks)
-        nbbo['timestamp'] = bins[nbbo.index.astype(int)]
-
-        exchange_data = grouped.pivot_table(
+        # 2) Pivot wide: time_bin x publisher_id
+        ex_wide = grouped.pivot_table(
             index='time_bin',
             columns='publisher_id',
             values=['bid', 'ask', 'bid_size', 'ask_size'],
-            aggfunc='first'
-        )
+            aggfunc='last'
+        ).sort_index()
 
+        # 3) Reindex sur tous les bins et ffill l’état (stateful)
+        all_bins = range(int(df['time_bin'].min()), int(df['time_bin'].max()) + 1)
+        ex_wide = ex_wide.reindex(all_bins).ffill()
+
+        # 4) NBBO à partir de cet état
+        bid_matrix = ex_wide['bid']
+        ask_matrix = ex_wide['ask']
+        bid_size_matrix = ex_wide['bid_size']
+        ask_size_matrix = ex_wide['ask_size']
+
+        # Get best bid (highest) and best ask (lowest)
+        nbbo_bid = bid_matrix.max(axis=1, skipna=True)
+        nbbo_bid_pub = bid_matrix.idxmax(axis=1, skipna=True)  # publisher_id
+        nbbo_ask = ask_matrix.min(axis=1, skipna=True)
+        nbbo_ask_pub = ask_matrix.idxmin(axis=1, skipna=True)
+
+        # Get corresponding sizes for best bid/ask
+        # For each row, get the size from the publisher that had the best bid/ask
+        nbbo_bid_size = pd.Series([
+            bid_size_matrix.loc[idx, pub] if pd.notna(pub) else 0
+            for idx, pub in zip(bid_size_matrix.index, nbbo_bid_pub)
+        ], index=bid_size_matrix.index)
+        
+        nbbo_ask_size = pd.Series([
+            ask_size_matrix.loc[idx, pub] if pd.notna(pub) else 0
+            for idx, pub in zip(ask_size_matrix.index, nbbo_ask_pub)
+        ], index=ask_size_matrix.index)
+
+        nbbo = pd.DataFrame({
+            'time_bin': ex_wide.index,
+            'nbbo_bid': nbbo_bid,
+            'nbbo_bid_size': nbbo_bid_size,
+            'nbbo_bid_publisher': nbbo_bid_pub,
+            'nbbo_ask': nbbo_ask,
+            'nbbo_ask_size': nbbo_ask_size,
+            'nbbo_ask_publisher': nbbo_ask_pub,
+        })
+        nbbo['timestamp'] = bins[nbbo['time_bin'].astype(int)]
+
+        # Exchange snapshots from the stateful wide format (already ffilled)
+        # Rename columns to match expected format: ex_{publisher_id}_{field}
+        exchange_data = ex_wide.copy()
         exchange_data.columns = [f'ex_{col[1]}_{col[0]}' for col in exchange_data.columns]
 
         resampled_df = nbbo.join(exchange_data).reset_index(drop=True)
