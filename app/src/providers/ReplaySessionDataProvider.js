@@ -21,6 +21,8 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
     this.isPaused = false;
     this.speed = 1;
     this.virtualTime = 0;
+    this.currentBar = null;
+    this.currentBarTime = null;
   }
 
   /**
@@ -38,6 +40,7 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
 
     console.log('📥 ReplayProvider: Loading session:', sessionId);
     this.sessionId = sessionId;
+    this.currentSession = sessionId; // Track current session for fetchHistorical check
     
     // Load session data using existing API
     this.sessionData = await api.loadSessionData(sessionId);
@@ -60,19 +63,28 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
 
   /**
    * Fetch historical data (for preview mode)
-   * @param {string} symbol - Symbol
+   * @param {string} symbol - Symbol/Session ID
    * @param {string} interval - Interval (e.g., '1', '5', '60')
    * @param {number} from - Start timestamp (optional)
    * @param {number} to - End timestamp (optional)
    * @returns {Promise<Array>} Array of OHLCV bars
    */
   async fetchHistorical(symbol, interval, from = null, to = null) {
-    if (!this.sessionData) {
-      throw new Error('Session not loaded. Call initialize() first.');
+    console.log(`📊 ReplayProvider: Fetching historical data for ${symbol} (interval: ${interval}s)`);
+    
+    // Auto-load session if not already loaded or different symbol
+    if (!this.sessionData || this.currentSession !== symbol) {
+      console.log(`📥 ReplayProvider: Auto-loading session: ${symbol}`);
+      
+      // Initialize with proper config object
+      try {
+        await this.initialize({ sessionId: symbol });
+      } catch (error) {
+        console.error('❌ ReplayProvider: Failed to auto-load session:', error);
+        return []; // Return empty array if can't load
+      }
     }
 
-    console.log(`📊 ReplayProvider: Fetching historical data (interval: ${interval}s)`);
-    
     // Convert ticks to OHLCV bars
     const intervalSeconds = parseInt(interval) || 1;
     const bars = this.aggregateToOHLCV(this.sessionData, intervalSeconds, from, to);
@@ -122,6 +134,10 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
     this.isPlaying = true;
     this.isPaused = false;
 
+    // Keep track of current bar being built
+    this.currentBar = null;
+    this.currentBarTime = null;
+
     // Fixed interval: 100ms per tick (10 ticks/sec), adjusted by speed
     const intervalMs = 100 / this.speed;
     
@@ -129,6 +145,12 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
       if (this.isPaused) return;
 
       if (this.currentIndex >= this.sessionData.length) {
+        // Emit final bar if exists
+        if (this.currentBar) {
+          this.notifySubscribers(this.currentBar);
+          this.currentBar = null;
+        }
+        
         console.log('⏹️ ReplayProvider: Reached end of session');
         this.stopStreaming();
         this.notifyEnd();
@@ -137,17 +159,28 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
 
       const tick = this.sessionData[this.currentIndex];
       
-      // Convert tick to bar format
-      const bar = this.tickToBar(tick);
+      // Convert tick to bar data
+      const tickBar = this.tickToBar(tick);
+      const tickBarTime = tickBar.time;
       
-      // Notify all subscribers
-      this.subscribers.forEach(callback => {
-        try {
-          callback(bar);
-        } catch (error) {
-          console.error('❌ Subscriber callback error:', error);
-        }
-      });
+      // If this is a new bar time, emit the previous bar and start a new one
+      if (this.currentBarTime !== null && tickBarTime !== this.currentBarTime) {
+        // Emit completed bar
+        this.notifySubscribers(this.currentBar);
+        
+        // Start new bar
+        this.currentBar = { ...tickBar };
+        this.currentBarTime = tickBarTime;
+      } else if (this.currentBar === null) {
+        // First bar
+        this.currentBar = { ...tickBar };
+        this.currentBarTime = tickBarTime;
+      } else {
+        // Same bar time - update OHLC
+        this.currentBar.high = Math.max(this.currentBar.high, tickBar.close);
+        this.currentBar.low = Math.min(this.currentBar.low, tickBar.close);
+        this.currentBar.close = tickBar.close;
+      }
       
       this.currentIndex++;
       
@@ -155,6 +188,19 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
       this.virtualTime += 0.1;
       
     }, intervalMs);
+  }
+
+  /**
+   * Notify all subscribers with a bar
+   */
+  notifySubscribers(bar) {
+    this.subscribers.forEach(callback => {
+      try {
+        callback(bar);
+      } catch (error) {
+        console.error('❌ Subscriber callback error:', error);
+      }
+    });
   }
 
   /**
@@ -166,6 +212,8 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
       this.tickInterval = null;
       this.isPlaying = false;
       this.isPaused = false;
+      this.currentBar = null;
+      this.currentBarTime = null;
       console.log('⏹️ ReplayProvider: Streaming stopped');
     }
   }
@@ -244,16 +292,25 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
   tickToBar(tick) {
     const mid = (parseFloat(tick.bid_price) + parseFloat(tick.ask_price)) / 2;
     
+    // Use the actual tick timestamp - it should be unique and increasing
+    const timestamp = Math.floor(tick.adjustedTimestamp);
+    
+    // Debug: Log if timestamp is not a number
+    if (typeof timestamp !== 'number' || isNaN(timestamp)) {
+      console.error('❌ Invalid timestamp:', {
+        adjustedTimestamp: tick.adjustedTimestamp,
+        type: typeof tick.adjustedTimestamp,
+        timestamp,
+        tick
+      });
+    }
+    
     return {
-      time: tick.adjustedTimestamp,
+      time: timestamp,  // Must be Unix timestamp (seconds)
       open: mid,
       high: mid,
       low: mid,
-      close: mid,
-      // Store original tick for access to detailed data
-      _tick: tick,
-      // Store virtual time
-      _virtualTime: this.virtualTime
+      close: mid
     };
   }
 
@@ -294,7 +351,7 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
           high: mid,
           low: mid,
           close: mid,
-          ticks: []
+          tickCount: 0
         });
       }
 
@@ -302,11 +359,18 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
       bucket.high = Math.max(bucket.high, mid);
       bucket.low = Math.min(bucket.low, mid);
       bucket.close = mid;
-      bucket.ticks.push(tick);
+      bucket.tickCount++;
     });
 
     // Convert to array and sort by time
-    return Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+    // Remove tickCount as it's not needed by OakView
+    return Array.from(buckets.values()).map(bar => ({
+      time: bar.time,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close
+    })).sort((a, b) => a.time - b.time);
   }
 
   /**
@@ -316,6 +380,75 @@ class ReplaySessionDataProvider extends OakViewDataProvider {
     // Emit a special 'end' event if needed
     // For now, just log
     console.log('🏁 ReplayProvider: Playback ended');
+  }
+
+  /**
+   * Get available timeframe intervals for a symbol
+   * Required by OakView to populate interval selector
+   * @param {string} symbol - Symbol/session ID
+   * @returns {Array<string>} Array of available intervals
+   */
+  getAvailableIntervals(symbol) {
+    // We support all standard intervals since we can aggregate from tick data
+    // Return common intraday intervals
+    return ['1', '5', '15', '30', '60', '240', '1D'];
+  }
+
+  /**
+   * Get the base (native) interval for a symbol
+   * @param {string} symbol - Symbol/session ID
+   * @returns {string} Base interval (OakView expects format: number + optional unit [mHDWMY])
+   */
+  getBaseInterval(symbol) {
+    // Our tick data is 100ms, but OakView's smallest supported interval is 1 second
+    // Return '1' for 1 second (no unit = seconds)
+    return '1'; // 1 second
+  }
+
+  /**
+   * Search for available symbols/sessions
+   * Required by OakView for symbol search functionality
+   * @param {string} query - Search query (can be empty to return all)
+   * @returns {Promise<Array>} Array of symbol objects
+   */
+  async searchSymbols(query = '') {
+    console.log('🔍 ReplayProvider: searchSymbols called with query:', query);
+    
+    try {
+      // Get all available sessions from the API
+      console.log('📡 ReplayProvider: Fetching sessions from API...');
+      const sessions = await api.getSessions();
+      console.log(`✓ ReplayProvider: Found ${sessions.length} sessions:`, sessions);
+      
+      const upperQuery = query.toUpperCase();
+      
+      // Filter sessions by query if provided (search in id, symbol, or date)
+      const filtered = query 
+        ? sessions.filter(session => 
+            session.id.toUpperCase().includes(upperQuery) ||
+            session.symbol.toUpperCase().includes(upperQuery) ||
+            session.date.includes(query)
+          )
+        : sessions;
+      
+      console.log(`🔍 ReplayProvider: After filtering by "${query}": ${filtered.length} sessions`);
+      
+      // Convert session objects to OakView symbol format
+      // Note: Using full session ID as symbol so the symbol-change event has unique identifier
+      const symbols = filtered.map(session => ({
+        symbol: session.id,              // Full session ID (e.g., "OLMA-20251118") - used in events
+        full_name: session.id,           // Display name
+        description: `${session.symbol} • ${session.date}`, // Description (• separator looks cleaner)
+        exchange: 'REPLAY',              // Exchange identifier
+        type: 'stock',                   // Type
+      }));
+      
+      console.log('✅ ReplayProvider: Returning symbols:', symbols);
+      return symbols;
+    } catch (error) {
+      console.error('❌ ReplayProvider: Error searching symbols:', error);
+      return [];
+    }
   }
 
   /**

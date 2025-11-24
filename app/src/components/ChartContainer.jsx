@@ -7,10 +7,11 @@
 
 import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import ReplaySessionDataProvider from '../providers/ReplaySessionDataProvider';
-// Import OakViewChartUI to get the version with toolbar
-import { OakViewChartUI } from 'oakview';
+// OakView is loaded as a Web Component - no React import needed
+// The oak-view element is registered globally when the library loads
+import 'oakview';
 
-const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef }, ref) => {
+const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, chartType, timeframe, providerRef, onSessionSelect }, ref) => {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
   const internalProviderRef = useRef(null);
@@ -44,7 +45,7 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
     if (!chartContainerRef.current || initializingRef.current) return;
 
     // Check if chart element already exists
-    const existingChart = chartContainerRef.current.querySelector('oakview-chart');
+    const existingChart = chartContainerRef.current.querySelector('oak-view');
     if (existingChart) {
       console.log('✓ OakView chart already exists, reusing it');
       chartRef.current = existingChart;
@@ -53,25 +54,24 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
     }
 
     initializingRef.current = true;
-    console.log('📊 Initializing OakView chart (with toolbar)...');
+    console.log('📊 Initializing OakView chart layout...');
 
-    // Wait for oakview-chart Web Component to be defined
-    customElements.whenDefined('oakview-chart').then(() => {
-      console.log('✓ oakview-chart Web Component is defined');
+    // Wait for oak-view Web Component to be defined
+    customElements.whenDefined('oak-view').then(() => {
+      console.log('✓ oak-view Web Component is defined');
       
       // Double-check it wasn't created in the meantime
-      if (chartContainerRef.current?.querySelector('oakview-chart')) {
+      if (chartContainerRef.current?.querySelector('oak-view')) {
         console.log('⚠️ Chart was created while waiting, using existing one');
-        chartRef.current = chartContainerRef.current.querySelector('oakview-chart');
+        chartRef.current = chartContainerRef.current.querySelector('oak-view');
         setChartReady(true);
         return;
       }
       
-      // Create the chart element (this will be the UI version with toolbar)
-      const chartElement = document.createElement('oakview-chart');
+      // Create the oak-view layout element (single pane layout)
+      const chartElement = document.createElement('oak-view');
+      chartElement.setAttribute('layout', 'single'); // Single pane layout
       chartElement.setAttribute('theme', 'dark');
-      chartElement.setAttribute('show-toolbar', 'true');
-      chartElement.setAttribute('hide-sidebar', 'true'); // Hide sidebar, keep toolbar
       
       if (chartContainerRef.current) {
         chartContainerRef.current.appendChild(chartElement);
@@ -79,12 +79,42 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
         // Use requestAnimationFrame to ensure element is fully connected
         requestAnimationFrame(() => {
-          console.log('✓ OakView chart element connected (with toolbar)');
+          console.log('✓ OakView layout element connected');
+          
+          // Create and set the data provider AFTER the element is connected
+          const provider = new ReplaySessionDataProvider();
+          internalProviderRef.current = provider;
+          
+          // Use the setDataProvider method
+          if (chartElement.setDataProvider) {
+            chartElement.setDataProvider(provider);
+            console.log('📡 OakView: Data provider set via setDataProvider()');
+          } else {
+            console.error('❌ OakView: setDataProvider method not found');
+          }
+          
+          // Listen for symbol-change events from OakView
+          chartElement.addEventListener('symbol-change', (e) => {
+            console.log('🔔 OakView symbol-change event:', e.detail);
+            const sessionId = e.detail.symbol; // This is the session ID (e.g., "OLMA-20251118")
+            
+            // Call the parent callback to load the session
+            if (onSessionSelect) {
+              // Parse session ID to get symbol and date
+              const [symbol, date] = sessionId.split('-');
+              onSessionSelect({
+                id: sessionId,
+                symbol: symbol,
+                date: date
+              });
+            }
+          });
+          
           setChartReady(true);
         });
       }
     }).catch(error => {
-      console.error('❌ Failed to initialize OakView chart:', error);
+      console.error('❌ Failed to initialize OakView:', error);
       initializingRef.current = false;
     });
 
@@ -94,7 +124,7 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
       chartRef.current = null;
       setChartReady(false);
     };
-  }, []);
+  }, [onSessionSelect]);
 
   // Load session when currentSession changes
   useEffect(() => {
@@ -113,18 +143,13 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
       console.log('📥 OakView: Loading session:', currentSession.id);
 
       try {
-        // Verify chart element exists
-        if (!chartRef.current.getChart) {
-          console.error('❌ Chart element does not have getChart method');
+        // Use existing provider (already set on the element)
+        const provider = internalProviderRef.current;
+        
+        if (!provider) {
+          console.error('❌ OakView: No data provider found!');
           return;
         }
-
-        // Create provider if doesn't exist
-        if (!internalProviderRef.current) {
-          internalProviderRef.current = new ReplaySessionDataProvider();
-        }
-
-        const provider = internalProviderRef.current;
 
         // Initialize with session
         const metadata = await provider.initialize({ 
@@ -133,14 +158,25 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
 
         console.log('✓ OakView: Session metadata:', metadata);
 
-        // Load preview data (historical)
-        const previewBars = await provider.fetchHistorical(metadata.symbol, '1');
+        // ✅ OAKVIEW RECOMMENDED PATTERN:
+        // 1. Fetch historical bars first
+        const historicalBars = await provider.fetchHistorical(currentSession.id, '1');
         
-        // Display preview using oakview-chart-ui's simple API
-        console.log('📊 OakView: Setting data:', previewBars.length, 'bars');
-        chartRef.current.setData(previewBars);
+        console.log('📊 OakView: Loaded historical bars:', historicalBars.length);
         
-        console.log('✓ OakView: Chart ready with preview data');
+        // Get the first pane chart
+        const paneChart = chartRef.current.getChartAt(0);
+        
+        if (paneChart) {
+          // 2. Load ONLY first bar as preview to initialize the series
+          // This creates the series so updateRealtime() works
+          const firstBar = historicalBars.slice(0, 1);
+          paneChart.setData(firstBar);
+          console.log('✓ OakView: Initialized with first bar - ready for playback');
+          
+          // Tell provider to start from beginning (no skipping)
+          // The first bar will be updated/replaced as playback begins
+        }
 
       } catch (error) {
         console.error('❌ OakView: Failed to load session:', error);
@@ -157,6 +193,57 @@ const ChartContainer = forwardRef(({ currentSession, sessionData, isLoading, cha
       }
     };
   }, [currentSession, chartReady]);
+
+  // Subscribe to provider updates and update chart in real-time
+  useEffect(() => {
+    if (!chartReady || !chartRef.current || !internalProviderRef.current) return;
+
+    const provider = internalProviderRef.current;
+    const paneChart = chartRef.current.getChartAt(0);
+    
+    if (!paneChart) {
+      console.error('❌ Cannot get pane chart for real-time updates');
+      return;
+    }
+
+    console.log('🔗 Setting up real-time chart updates via OakView updateRealtime()');
+
+    // ✅ OAKVIEW RECOMMENDED PATTERN:
+    // 3. Subscribe to real-time updates and use updateRealtime()
+    const unsubscribe = provider.subscribe('replay', '1', (bar) => {
+      // Debug: Log the actual bar we receive
+      console.log('📊 Received bar from provider:', JSON.stringify(bar));
+      
+      // Debug: Verify bar format before sending to OakView
+      if (typeof bar.time !== 'number') {
+        console.error('❌ Bar has invalid time type:', {
+          bar,
+          timeType: typeof bar.time,
+          timeValue: bar.time,
+          isObject: bar.time === Object(bar.time)
+        });
+        return; // Skip this bar
+      }
+      
+      // Use OakView's updateRealtime() method
+      try {
+        paneChart.updateRealtime(bar);
+      } catch (error) {
+        console.error('❌ Failed to update realtime bar:', {
+          error: error.message,
+          bar,
+          barJSON: JSON.stringify(bar),
+          stack: error.stack
+        });
+      }
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [chartReady, chartRef.current, internalProviderRef.current]);
 
   return (
     <div 

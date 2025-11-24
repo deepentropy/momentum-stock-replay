@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { usePositionManager } from "../hooks/usePositionManager";
 import { useSettings } from "../contexts/SettingsContext";
 
-export default function OrderBookPanel({ sessionData, onAddMarker }) {
+export default function OrderBookPanel({ sessionData, onAddMarker, onOpenSettings }) {
   const { quote, stats } = sessionData;
   const [positionSize, setPositionSize] = useState(100);
   const { positions, trades, summary, buy, sell, reset, updateCurrentPrice } = usePositionManager();
@@ -202,9 +202,21 @@ export default function OrderBookPanel({ sessionData, onAddMarker }) {
 
   return (
     <div className="w-[400px] flex flex-col bg-[#131722] border-l border-[#2A2E39] h-full overflow-hidden">
-      {/* Header - TradingView Style */}
-      <div className="flex-shrink-0 h-[44px] bg-[#1E222D] border-b border-[#2A2E39] flex items-center justify-center">
+      {/* Header - TradingView Style with Settings */}
+      <div className="flex-shrink-0 h-[44px] bg-[#1E222D] border-b border-[#2A2E39] flex items-center justify-between px-2">
         <h3 className="text-[13px] font-semibold text-[#B2B5BE]">📖 Order Book</h3>
+        
+        {/* Settings Button */}
+        <button
+          onClick={onOpenSettings}
+          className="h-[32px] w-[32px] rounded hover:bg-[#2A2E39] transition-colors flex items-center justify-center text-[#B2B5BE] hover:text-white"
+          title="Settings"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
       </div>
 
       {/* Order Book - Fixed Height based on depth */}

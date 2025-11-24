@@ -3,7 +3,7 @@ import { useTickPlayer } from "../hooks/useTickPlayer";
 import { api } from "../utils/api";
 import { USE_OAKVIEW_CHART } from "../config";
 
-export default function ControlsBar({ currentSession, sessionData, setSessionData, onLoadingChange, providerRef, chartRef }) {
+export default function ControlsBar({ currentSession, sessionData, setSessionData, onLoadingChange, providerRef, chartRef, onSelectSession }) {
   const [status, setStatus] = useState('disconnected');
   const [error, setError] = useState(null);
   const [tickData, setTickData] = useState(null);
@@ -99,13 +99,16 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
       // If already playing, do nothing
       if (provider.isPlaying) return;
       
+      // No need to clear anything since we never loaded preview
+      console.log('▶️ Starting playback (no preview to clear)');
+      
       // Start streaming
       console.log('▶️ Starting OakView playback');
       setStatus('connected');
       
-      // Subscribe to tick updates
+      // Subscribe to tick updates - chart will be updated by ChartContainer
       provider.subscribe(currentSession.id.split('-')[0], '1', (bar) => {
-        // Update sessionData with tick info
+        // Update sessionData with tick info for OrderBookPanel
         if (bar._tick) {
           const tick = bar._tick;
           setSessionData(prev => ({
@@ -321,7 +324,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
       )}
 
       <div className="flex items-center gap-3">
-        {/* Play/Pause Button with Tooltip */}
+        {/* Play/Pause Button */}
         <div className="relative">
           <button
             onClick={currentIsPlaying && !currentIsPaused ? handlePause : handlePlay}
@@ -343,12 +346,11 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
             )}
           </button>
 
-          {/* Tooltip - TradingView Style */}
+          {/* Tooltip */}
           {showPlayTooltip && (
             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="bg-[#2962FF] text-white px-3 py-2 rounded shadow-lg whitespace-nowrap text-[12px] font-medium">
                 Click to start playback
-                {/* Arrow pointing down */}
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-[1px]">
                   <div className="border-4 border-transparent border-t-[#2962FF]"></div>
                 </div>
@@ -371,7 +373,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
 
         <div className="w-px h-5 bg-[#2A2E39]"></div>
 
-        {/* Speed Selector Dropdown */}
+        {/* Speed Selector */}
         <div className="relative">
           <button
             onClick={() => setShowSpeedMenu(!showSpeedMenu)}
@@ -403,7 +405,7 @@ export default function ControlsBar({ currentSession, sessionData, setSessionDat
           )}
         </div>
 
-        {/* Clock Display - TradingView Style */}
+        {/* Clock Display */}
         {currentTime && (
           <>
             <div className="w-px h-5 bg-[#2A2E39]"></div>

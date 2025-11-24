@@ -9,6 +9,9 @@ export default function SessionSearchModal({ isOpen, onClose, onSelectSession, c
   const [selectedCategory, setSelectedCategory] = useState('All');
   const inputRef = useRef(null);
 
+  // Debug: log when modal renders
+  console.log('🔍 SessionSearchModal render - isOpen:', isOpen, 'sessions:', sessions.length);
+
   useEffect(() => {
     if (isOpen) {
       loadSessions();
@@ -58,7 +61,11 @@ export default function SessionSearchModal({ isOpen, onClose, onSelectSession, c
   const categories = ['All', 'Stocks', 'Recent'];
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-start justify-center z-50" onClick={onClose}>
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-start justify-center z-50" 
+      onClick={onClose}
+      data-testid="session-search-modal"
+    >
       <div
         className="bg-[#1E222D] rounded mt-16 w-full max-w-3xl max-h-[600px] flex flex-col border border-[#2A2E39] shadow-2xl"
         onClick={(e) => e.stopPropagation()}

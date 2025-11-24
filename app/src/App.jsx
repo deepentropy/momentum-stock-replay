@@ -58,7 +58,6 @@ export default function App() {
             setChartType={setChartType}
             timeframe={timeframe}
             setTimeframe={setTimeframe}
-            onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
 
@@ -66,6 +65,7 @@ export default function App() {
           <OrderBookPanel
             sessionData={sessionData}
             onAddMarker={handleAddMarker}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
 
