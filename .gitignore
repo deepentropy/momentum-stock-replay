@@ -4,6 +4,7 @@ nul
 .tmp
 .claude/
 summary/*
+node_modules
 # Security - credentials and sensitive data
 .env
 .env.local
