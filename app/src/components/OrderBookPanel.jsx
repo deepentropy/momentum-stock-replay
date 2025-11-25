@@ -206,8 +206,38 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
         <h3 className="text-[13px] font-semibold text-[#B2B5BE]">📖 Order Book</h3>
       </div>
 
+      {/* NBBO Summary Row - Shows aggregated bid/ask that appears on chart */}
+      {quote && (
+        <div className="flex-shrink-0 px-2 py-2 border-b border-[#2A2E39] bg-[#1E222D]">
+          <div className="text-[10px] text-[#787B86] uppercase font-semibold mb-1">NBBO (Chart View)</div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-[#089981] font-bold">BID</span>
+              <span className="text-white font-mono text-sm">{quote.bid.toFixed(4)}</span>
+            </div>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-[#F23645] font-bold">ASK</span>
+              <span className="text-white font-mono text-sm">{quote.ask.toFixed(4)}</span>
+            </div>
+            <div className="flex-1 flex items-center gap-2">
+              <span className="text-[#787B86] font-bold">SPR</span>
+              <span className={`font-mono text-sm ${quote.bid >= quote.ask ? 'text-red-500 font-bold' : 'text-[#B2B5BE]'}`}>
+                {(quote.ask - quote.bid).toFixed(4)}
+              </span>
+            </div>
+          </div>
+          {quote.bid >= quote.ask && (
+            <div className="mt-1 px-2 py-1 bg-red-500/20 border-l-2 border-red-500 text-red-400 text-[10px] flex items-center gap-1">
+              <span>⚠️</span>
+              <span>CROSSED: Best bid from {getExchangeName(quote.best_bid_publisher || 0)} exceeds best ask from {getExchangeName(quote.best_ask_publisher || 0)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Order Book - Fixed Height based on depth */}
       <div className="flex-shrink-0 px-2 py-2 border-b border-[#2A2E39] bg-[#131722]">
+        <div className="text-[10px] text-[#787B86] uppercase font-semibold mb-1">Exchange Snapshots</div>
         <table className="w-full text-xs table-fixed border-collapse">
           <thead>
             <tr className="bg-[#1E222D] text-[#B2B5BE]">

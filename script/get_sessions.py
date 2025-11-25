@@ -234,6 +234,26 @@ class NBBOResampler:
         print(f"  Resampled ticks: {len(resampled_df):,}")
         print(f"  Reduction: {100 * (1 - len(resampled_df) / original_tick_count):.1f}%")
 
+        # Filter out crossed NBBOs (bid >= ask)
+        initial_count = len(resampled_df)
+        resampled_df['spread'] = resampled_df['nbbo_ask'] - resampled_df['nbbo_bid']
+        
+        # Count spread statistics before filtering
+        negative_spreads = len(resampled_df[resampled_df['spread'] < 0])
+        zero_spreads = len(resampled_df[resampled_df['spread'] == 0])
+        
+        # Filter to keep only positive spreads
+        resampled_df = resampled_df[resampled_df['spread'] > 0].copy()
+        resampled_df = resampled_df.drop(columns=['spread']).reset_index(drop=True)
+        
+        filtered_count = initial_count - len(resampled_df)
+        
+        if filtered_count > 0:
+            print(f"  ⚠️  Filtered {filtered_count:,} crossed/zero NBBO samples ({filtered_count/initial_count*100:.1f}%)")
+            print(f"      Negative spreads: {negative_spreads:,} ({negative_spreads/initial_count*100:.1f}%)")
+            print(f"      Zero spreads: {zero_spreads:,} ({zero_spreads/initial_count*100:.1f}%)")
+            print(f"  ✅ Valid ticks after filtering: {len(resampled_df):,}")
+        
         metadata = {
             'original_ticks': original_tick_count,
             'resampled_ticks': len(resampled_df),
@@ -242,7 +262,11 @@ class NBBOResampler:
             'publishers': publishers,
             'publisher_map': publisher_map,
             'start_time': start_time.isoformat(),
-            'end_time': end_time.isoformat()
+            'end_time': end_time.isoformat(),
+            'crossed_nbbo_filtered': filtered_count,
+            'crossed_nbbo_negative': negative_spreads,
+            'crossed_nbbo_zero': zero_spreads,
+            'crossed_nbbo_pct': (filtered_count / initial_count * 100) if initial_count > 0 else 0
         }
 
         return resampled_df, metadata
