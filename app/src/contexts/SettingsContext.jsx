@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   sellShortcut: 'Ctrl+S',
   orderBookDepth: 15,
   orderBookMinSize: 1,
+  orderBookViewMode: 'exchange', // 'exchange' or 'aggregated'
   timezone: 'America/New_York', // Fixed to New York
 };
 

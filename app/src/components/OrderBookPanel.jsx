@@ -156,8 +156,37 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
       size: a.size
     }));
 
+    // If aggregated mode, group by price level
+    if (settings.orderBookViewMode === 'aggregated') {
+      // Aggregate bids by price
+      const bidsByPrice = {};
+      bidsWithNames.forEach(b => {
+        const priceKey = b.price.toFixed(4);
+        if (!bidsByPrice[priceKey]) {
+          bidsByPrice[priceKey] = { price: b.price, size: 0 };
+        }
+        bidsByPrice[priceKey].size += b.size;
+      });
+
+      // Aggregate asks by price
+      const asksByPrice = {};
+      asksWithNames.forEach(a => {
+        const priceKey = a.price.toFixed(4);
+        if (!asksByPrice[priceKey]) {
+          asksByPrice[priceKey] = { price: a.price, size: 0 };
+        }
+        asksByPrice[priceKey].size += a.size;
+      });
+
+      // Convert to arrays and sort
+      const aggregatedBids = Object.values(bidsByPrice).sort((a, b) => b.price - a.price);
+      const aggregatedAsks = Object.values(asksByPrice).sort((a, b) => a.price - b.price);
+
+      return { bids: aggregatedBids, asks: aggregatedAsks };
+    }
+
     return { bids: bidsWithNames, asks: asksWithNames };
-  }, [quote, getOrderBook, settings.orderBookMinSize]);
+  }, [quote, getOrderBook, settings.orderBookMinSize, settings.orderBookViewMode]);
 
   // Assign colors based on unique price levels
   const getPriceLevelColors = () => {
@@ -237,16 +266,29 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
 
       {/* Order Book - Fixed Height based on depth */}
       <div className="flex-shrink-0 px-2 py-2 border-b border-[#2A2E39] bg-[#131722]">
-        <div className="text-[10px] text-[#787B86] uppercase font-semibold mb-1">Exchange Snapshots</div>
+        <div className="text-[10px] text-[#787B86] uppercase font-semibold mb-1">
+          {settings.orderBookViewMode === 'exchange' ? 'Exchange Snapshots' : 'Aggregated by Price'}
+        </div>
         <table className="w-full text-xs table-fixed border-collapse">
           <thead>
             <tr className="bg-[#1E222D] text-[#B2B5BE]">
-              <th className="text-left px-1 py-1 font-bold border-r border-black">Maker</th>
-              <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
-              <th className="text-right px-1 py-1 font-bold border-r border-black">Size</th>
-              <th className="text-left px-1 py-1 font-bold border-r border-black">Maker</th>
-              <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
-              <th className="text-right px-1 py-1 font-bold">Size</th>
+              {settings.orderBookViewMode === 'exchange' ? (
+                <>
+                  <th className="text-left px-1 py-1 font-bold border-r border-black">Maker</th>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Size</th>
+                  <th className="text-left px-1 py-1 font-bold border-r border-black">Maker</th>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
+                  <th className="text-right px-1 py-1 font-bold">Size</th>
+                </>
+              ) : (
+                <>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Size</th>
+                  <th className="text-right px-1 py-1 font-bold border-r border-black">Price</th>
+                  <th className="text-right px-1 py-1 font-bold">Size</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -261,24 +303,43 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
 
               return (
                 <tr key={i} style={{ height: '22px' }}>
-                  <td className={`text-left px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
-                    {bid?.maker || ''}
-                  </td>
-                  <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
-                    {bid ? bid.price.toFixed(2) : ''}
-                  </td>
-                  <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
-                    {bid?.size || ''}
-                  </td>
-                  <td className={`text-left px-1 py-0.5 font-bold border-r border-black text-black ${askColor}`}>
-                    {ask?.maker || ''}
-                  </td>
-                  <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${askColor}`}>
-                    {ask ? ask.price.toFixed(2) : ''}
-                  </td>
-                  <td className={`text-right px-1 py-0.5 font-bold text-black ${askColor}`}>
-                    {ask?.size || ''}
-                  </td>
+                  {settings.orderBookViewMode === 'exchange' ? (
+                    <>
+                      <td className={`text-left px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
+                        {bid?.maker || ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
+                        {bid ? bid.price.toFixed(2) : ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
+                        {bid?.size || ''}
+                      </td>
+                      <td className={`text-left px-1 py-0.5 font-bold border-r border-black text-black ${askColor}`}>
+                        {ask?.maker || ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${askColor}`}>
+                        {ask ? ask.price.toFixed(2) : ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold text-black ${askColor}`}>
+                        {ask?.size || ''}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
+                        {bid ? bid.price.toFixed(2) : ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${bidColor}`}>
+                        {bid?.size || ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold border-r border-black text-black ${askColor}`}>
+                        {ask ? ask.price.toFixed(2) : ''}
+                      </td>
+                      <td className={`text-right px-1 py-0.5 font-bold text-black ${askColor}`}>
+                        {ask?.size || ''}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}

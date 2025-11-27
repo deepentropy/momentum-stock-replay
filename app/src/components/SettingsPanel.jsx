@@ -160,6 +160,36 @@ export default function SettingsPanel() {
               </div>
               <p className="text-xs text-gray-500 mt-1">Only show levels with at least this many shares (0 = show all)</p>
             </div>
+
+            {/* View Mode */}
+            <div>
+              <label className="text-sm text-gray-400 block mb-2">View Mode</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => updateSetting('orderBookViewMode', 'exchange')}
+                  className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                    settings.orderBookViewMode === 'exchange'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  Exchange
+                </button>
+                <button
+                  onClick={() => updateSetting('orderBookViewMode', 'aggregated')}
+                  className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                    settings.orderBookViewMode === 'aggregated'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  }`}
+                >
+                  Aggregated
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Exchange: Show individual exchange quotes | Aggregated: Sum by price level
+              </p>
+            </div>
           </div>
         </div>
       </div>
