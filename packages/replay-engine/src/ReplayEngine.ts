@@ -427,11 +427,6 @@ export class ReplayEngine implements IReplayEngine {
     ) {
       this.emitStateChange();
     }
-
-    // Additional logging for status changes (useful for debugging)
-    if (partial.status && partial.status !== previousStatus) {
-      // Status changed
-    }
   }
 
   private emitStateChange(): void {
