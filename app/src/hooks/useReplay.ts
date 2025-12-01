@@ -81,10 +81,58 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * Hook for managing replay state from a SessionDataProvider
+ * useReplay - React hook for replay state management
  * 
- * @param provider - The SessionDataProvider instance
+ * Provides reactive state and control functions for the replay engine.
+ * This hook connects to a SessionDataProvider and subscribes to state changes,
+ * providing an easy-to-use interface for controlling tick-by-tick playback.
+ * 
+ * @param provider - The SessionDataProvider instance to control
  * @returns Reactive state and control functions for replay
+ * 
+ * @example
+ * ```tsx
+ * function PlaybackControls({ provider }) {
+ *   const { isPlaying, progress, play, pause, seekToPercent } = useReplay(provider);
+ *   
+ *   return (
+ *     <div>
+ *       <button onClick={isPlaying ? pause : play}>
+ *         {isPlaying ? 'Pause' : 'Play'}
+ *       </button>
+ *       <input 
+ *         type="range" 
+ *         value={progress} 
+ *         onChange={(e) => seekToPercent(Number(e.target.value))}
+ *       />
+ *     </div>
+ *   );
+ * }
+ * ```
+ * 
+ * @example
+ * ```tsx
+ * function ReplayStatus({ provider }) {
+ *   const { 
+ *     currentTimeFormatted, 
+ *     durationFormatted, 
+ *     speed, 
+ *     setSpeed 
+ *   } = useReplay(provider);
+ *   
+ *   return (
+ *     <div>
+ *       <span>Time: {currentTimeFormatted}</span>
+ *       <span>Duration: {durationFormatted}</span>
+ *       <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+ *         <option value="1">1x</option>
+ *         <option value="10">10x</option>
+ *         <option value="100">100x</option>
+ *       </select>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
 export function useReplay(provider: SessionDataProvider | null): UseReplayReturn {
   const [state, setState] = useState<ReplayState | null>(null);
