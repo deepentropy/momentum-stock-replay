@@ -8,8 +8,8 @@ export default defineConfig({
   base: '/momentum-stock-replay/',
   resolve: {
     alias: {
-      '@deepentropy/oakscriptjs': resolve(__dirname, 'node_modules/@deepentropy/oakscriptjs/oakscriptjs'),
-      '@deepentropy/oakview': resolve(__dirname, 'node_modules/@deepentropy/oakview'),
+      '@deepentropy/oakscriptjs': resolve(__dirname, 'node_modules/@deepentropy/oakscriptjs/oakscriptjs/dist/index.mjs'),
+      '@deepentropy/oakview': resolve(__dirname, 'node_modules/@deepentropy/oakview/src/data-providers/types.d.ts'),
       '@momentum/replay-engine': resolve(__dirname, '../packages/replay-engine/src'),
     },
   },

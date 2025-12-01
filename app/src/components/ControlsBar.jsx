@@ -1,182 +1,95 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { useTickPlayer } from "../hooks/useTickPlayer";
 import { useReplay } from "../hooks/useReplay";
-import { api } from "../utils/api";
 
 export default function ControlsBar({ 
   currentSession, 
-  sessionData, 
-  setSessionData, 
   onLoadingChange,
-  // New props for provider-based replay
   provider = null,
 }) {
-  const [status, setStatus] = useState('disconnected');
-  const [error, setError] = useState(null);
-  const [tickData, setTickData] = useState(null);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
-  const [currentTime, setCurrentTime] = useState(null);
   const [showPlayTooltip, setShowPlayTooltip] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Use the replay hook when provider is available
-  const replay = useReplay(provider);
-  const useProviderMode = Boolean(provider);
-
-  const handleTick = useCallback((tick, virtualTime) => {
-    setError(null);
-
-    // Use virtual time for clock display (increments by 0.1s per tick)
-    // This ensures the timer shows continuous wall-clock progression
-    setCurrentTime(virtualTime);
-
-    // Use actual data timestamp for chart
-    const unixTime = tick.adjustedTimestamp;
-
-    setSessionData(prev => ({
-      ...prev,  // Preserve level2Data
-      quote: {
-        t: unixTime,
-        bid: parseFloat(tick.bid_price),
-        ask: parseFloat(tick.ask_price),
-        bidSize: parseFloat(tick.bid_size),
-        askSize: parseFloat(tick.ask_size),
-        timestamp: tick.timestamp,
-        nbbo: true,
-        exchanges: tick.exchanges || []  // Include exchange data for OrderBookPanel
-      },
-      stats: {
-        ...prev.stats,
-        quoteCount: prev.stats.quoteCount + 1
-      }
-    }));
-  }, [setSessionData]);
-
-  const handleInit = useCallback((meta) => {
-    console.log('📊 Session initialized:', meta);
-    setSessionData(prev => ({
-      ...prev,
-      stats: { ...prev.stats, sessionMeta: meta }
-    }));
-    setStatus('connected');
-    onLoadingChange?.(false);
-  }, [setSessionData, onLoadingChange]);
-
-  const handleEnd = useCallback(() => {
-    console.log('✅ Session playback ended');
-    setStatus('completed');
-  }, []);
-
+  // Use the replay hook for all playback control
   const {
-    loadAndPlay,
-    stop,
-    pause,
-    resume,
-    changeSpeed,
+    state,
+    progress,
+    isIdle,
     isPlaying,
     isPaused,
+    hasEnded,
     speed,
-    progress
-  } = useTickPlayer(handleTick, handleInit, handleEnd);
+    availableSpeeds,
+    currentTimeFormatted,
+    endTimeFormatted,
+    play,
+    pause,
+    stop,
+    seekToPercent,
+    setSpeed,
+    togglePlayPause,
+  } = useReplay(provider);
 
+  // Speed options for the dropdown
+  const speedOptions = availableSpeeds.map(s => ({
+    value: s,
+    label: `${s}x`
+  }));
+
+  // Handle play button click
   const handlePlay = useCallback(async () => {
-    if (!currentSession) return;
-    // If paused, resume instead of restarting
-    if (isPlaying && isPaused) {
-      return handlePause(); // This will resume
+    if (!currentSession || !provider) return;
+    
+    // If already playing, just toggle play/pause
+    if (isPlaying || isPaused || hasEnded) {
+      togglePlayPause();
+      return;
     }
-    if (isPlaying && !isPaused) return;
 
-    console.log('▶️ Starting playback for:', currentSession.id);
-    setStatus('loading');
-    onLoadingChange?.(true);
+    // Otherwise, load the session and start playback
+    setIsLoading(true);
     setError(null);
-
-    setSessionData({
-      quote: null,
-      stats: { quoteCount: 0, sessionMeta: null }
-    });
+    onLoadingChange?.(true);
 
     try {
-      let tickArray = null;
-
-      if (!tickData || tickData.sessionId !== currentSession.id) {
-        console.log('📥 Loading tick data from GitHub...');
-        const loadedData = await api.loadSessionData(currentSession.id);
-
-        // The loadedData is the tick array
-        tickArray = loadedData;
-
-        // Store the tick data
-        setTickData({
-          sessionId: currentSession.id,
-          data: tickArray
-        });
-      } else {
-        // Use cached data
-        tickArray = tickData.data;
-      }
-
-      await loadAndPlay(currentSession.id, tickArray);
+      console.log('▶️ Loading and starting playback for:', currentSession.id);
+      await provider.loadSession(currentSession.id);
+      play();
     } catch (err) {
       console.error('❌ Failed to load session:', err);
       setError(`Failed to load session: ${err.message}`);
-      setStatus('error');
+    } finally {
+      setIsLoading(false);
       onLoadingChange?.(false);
     }
-  }, [currentSession, tickData, isPlaying, isPaused, loadAndPlay, onLoadingChange, setSessionData]);
+  }, [currentSession, provider, isPlaying, isPaused, hasEnded, togglePlayPause, play, onLoadingChange]);
 
-  const handlePause = () => {
-    if (!isPlaying) return;
-
-    if (isPaused) {
-      console.log('▶️ Resuming playback');
-      resume();
-      setStatus('connected');
-    } else {
-      console.log('⏸️ Pausing playback');
-      pause();
-      setStatus('paused');
-    }
-  };
-
-  const handleStop = () => {
-    if (!isPlaying) return;
-
+  // Handle stop button click
+  const handleStop = useCallback(() => {
+    if (!provider) return;
     console.log('⏹️ Stopping playback');
     stop();
-    setStatus('disconnected');
     setError(null);
-    onLoadingChange?.(false);
-    setSessionData(prev => ({
-      ...prev,  // Preserve level2Data
-      quote: null,
-      stats: { quoteCount: 0, sessionMeta: null }
-    }));
-  };
+  }, [provider, stop]);
 
-  const handleSpeedChange = (newSpeed) => {
+  // Handle speed change
+  const handleSpeedChange = useCallback((newSpeed) => {
     const speedValue = parseFloat(newSpeed);
-    changeSpeed(speedValue);
-    if (isPlaying) {
-      console.log('⚡ Changing speed to:', speedValue);
-    }
-  };
+    setSpeed(speedValue);
+    console.log('⚡ Changing speed to:', speedValue);
+    setShowSpeedMenu(false);
+  }, [setSpeed]);
 
-  const speedOptions = [
-    { value: 0.1, label: '0.1x' },
-    { value: 0.25, label: '0.25x' },
-    { value: 0.5, label: '0.5x' },
-    { value: 1, label: '1x' },
-    { value: 2, label: '2x' },
-    { value: 5, label: '5x' },
-    { value: 10, label: '10x' },
-    { value: 50, label: '50x' },
-    { value: 100, label: '100x' },
-  ];
+  // Handle seek via progress bar
+  const handleSeek = useCallback((e) => {
+    const percent = parseFloat(e.target.value);
+    seekToPercent(percent);
+  }, [seekToPercent]);
 
   // Show tooltip when session is selected but not playing
   useEffect(() => {
-    if (currentSession && !isPlaying && status === 'disconnected') {
+    if (currentSession && isIdle && !isLoading) {
       setShowPlayTooltip(true);
       // Hide tooltip after 5 seconds
       const timer = setTimeout(() => {
@@ -186,7 +99,12 @@ export default function ControlsBar({
     } else {
       setShowPlayTooltip(false);
     }
-  }, [currentSession, isPlaying, status]);
+  }, [currentSession, isIdle, isLoading]);
+
+  // Determine if controls should be disabled
+  const hasData = state && state.startTime !== state.endTime;
+  const canPlay = Boolean(currentSession && provider);
+  const canStop = isPlaying || isPaused || hasEnded;
 
   return (
     <div className="bg-[#1E222D] border-t border-[#2A2E39] px-4 py-2.5">
@@ -200,12 +118,12 @@ export default function ControlsBar({
         {/* Play/Pause Button with Tooltip */}
         <div className="relative">
           <button
-            onClick={isPlaying && !isPaused ? handlePause : handlePlay}
-            disabled={status === 'loading'}
+            onClick={isPlaying ? pause : handlePlay}
+            disabled={isLoading || !canPlay}
             className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2A2E39] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[#B2B5BE] hover:text-white"
-            title={isPlaying && !isPaused ? 'Pause' : 'Play'}
+            title={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying && !isPaused ? (
+            {isPlaying ? (
               // Pause Icon
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <rect x="4" y="3" width="3" height="10" rx="1"/>
@@ -236,7 +154,7 @@ export default function ControlsBar({
         {/* Stop Button */}
         <button
           onClick={handleStop}
-          disabled={!isPlaying}
+          disabled={!canStop}
           className="w-8 h-8 flex items-center justify-center rounded hover:bg-[#2A2E39] transition-colors disabled:opacity-30 disabled:cursor-not-allowed text-[#B2B5BE] hover:text-white"
           title="Stop"
         >
@@ -266,7 +184,7 @@ export default function ControlsBar({
                 {speedOptions.map((option) => (
                   <button
                     key={option.value}
-                    onClick={() => { handleSpeedChange(option.value); setShowSpeedMenu(false); }}
+                    onClick={() => handleSpeedChange(option.value)}
                     className={`w-full px-3 py-2 text-left text-[12px] hover:bg-[#2A2E39] ${
                       speed === option.value ? 'bg-[#2A2E39] text-white' : 'text-[#B2B5BE]'
                     }`}
@@ -279,31 +197,50 @@ export default function ControlsBar({
           )}
         </div>
 
-        {/* Clock Display - TradingView Style */}
-        {currentTime && (
-          <>
-            <div className="w-px h-5 bg-[#2A2E39]"></div>
-            <div className="flex items-center gap-1.5 ml-auto bg-[#131722] px-2.5 py-1 rounded">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="text-[#787B86]">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M8 5V8L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              <span className="text-[12px] text-[#B2B5BE] font-mono">
-                {new Date(currentTime * 1000).toLocaleString('en-US', {
-                  timeZone: 'America/New_York',
-                  month: '2-digit',
-                  day: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: false
-                }).replace(',', '')}
-              </span>
-              <span className="text-[10px] text-[#787B86] uppercase">EST</span>
-            </div>
-          </>
-        )}
+        <div className="w-px h-5 bg-[#2A2E39]"></div>
+
+        {/* Progress Bar Section */}
+        <div className="flex-1 flex items-center gap-3">
+          {/* Current Time */}
+          <span className="text-[12px] font-mono text-[#B2B5BE] min-w-[65px]">
+            {hasData ? currentTimeFormatted : '--:--:--'}
+          </span>
+          
+          {/* Progress Slider */}
+          <div className="flex-1 relative h-6 flex items-center group">
+            {/* Track background */}
+            <div className="absolute inset-x-0 h-1 bg-[#2A2E39] rounded-full" />
+            
+            {/* Progress fill */}
+            <div 
+              className="absolute left-0 h-1 bg-[#2962FF] rounded-full transition-all"
+              style={{ width: `${hasData ? progress : 0}%` }}
+            />
+            
+            {/* Slider input (invisible but functional) */}
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              value={hasData ? progress : 0}
+              onChange={handleSeek}
+              disabled={!hasData}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-default"
+            />
+            
+            {/* Thumb indicator */}
+            <div 
+              className="absolute w-3 h-3 bg-[#2962FF] rounded-full shadow-lg transform -translate-x-1/2 pointer-events-none group-hover:scale-125 transition-transform"
+              style={{ left: `${hasData ? progress : 0}%` }}
+            />
+          </div>
+          
+          {/* End Time */}
+          <span className="text-[12px] font-mono text-[#787B86] min-w-[65px] text-right">
+            {hasData ? endTimeFormatted : '--:--:--'}
+          </span>
+        </div>
       </div>
     </div>
   );

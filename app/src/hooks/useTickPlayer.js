@@ -1,6 +1,33 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 
+/**
+ * @deprecated This hook is deprecated. Use useReplay with SessionDataProvider instead.
+ * The replay-engine based approach provides better performance, seeking, and progress tracking.
+ * 
+ * Example migration:
+ * ```jsx
+ * // Old way (deprecated)
+ * const { loadAndPlay, stop, pause, resume } = useTickPlayer(onTick, onInit, onEnd);
+ * 
+ * // New way
+ * import { useReplay } from '../hooks/useReplay';
+ * import { SessionDataProvider } from '../providers/SessionDataProvider';
+ * 
+ * const provider = useMemo(() => new SessionDataProvider(), []);
+ * const { play, pause, stop, seekToPercent, progress } = useReplay(provider);
+ * ```
+ */
 export function useTickPlayer(onTick, onInit, onEnd) {
+  // Log deprecation warning in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '⚠️ useTickPlayer is deprecated. Please migrate to useReplay with SessionDataProvider. ' +
+        'See the hook documentation for migration instructions.'
+      );
+    }
+  }, []);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
