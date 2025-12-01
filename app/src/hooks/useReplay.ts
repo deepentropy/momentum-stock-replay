@@ -75,17 +75,6 @@ function formatDuration(seconds: number): string {
 }
 
 /**
- * Default replay state
- */
-const DEFAULT_STATE: ReplayState = {
-  status: 'idle',
-  currentTime: 0,
-  speed: 1,
-  startTime: 0,
-  endTime: 0,
-};
-
-/**
  * Hook for managing replay state from a SessionDataProvider
  * 
  * @param provider - The SessionDataProvider instance

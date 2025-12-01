@@ -425,24 +425,34 @@ export class SessionDataProvider implements OakViewDataProvider {
    * Convert raw API tick data to TickData format for ReplayEngine
    */
   private convertToTickData(rawTicks: RawTickData[]): TickData[] {
-    return rawTicks.map(tick => {
-      const bidPrice = parseFloat(tick.bid_price || tick.priceBid || '0');
-      const askPrice = parseFloat(tick.ask_price || tick.priceAsk || '0');
-      const midPrice = (bidPrice + askPrice) / 2;
+    return rawTicks
+      .filter(tick => {
+        // Filter out ticks with invalid prices
+        const bidPrice = parseFloat(tick.bid_price || tick.priceBid || '0');
+        const askPrice = parseFloat(tick.ask_price || tick.priceAsk || '0');
+        return bidPrice > 0 || askPrice > 0;
+      })
+      .map(tick => {
+        const bidPrice = parseFloat(tick.bid_price || tick.priceBid || '0');
+        const askPrice = parseFloat(tick.ask_price || tick.priceAsk || '0');
+        // Use the non-zero price if one is zero, otherwise average
+        const midPrice = bidPrice === 0 ? askPrice : 
+                         askPrice === 0 ? bidPrice : 
+                         (bidPrice + askPrice) / 2;
 
-      return {
-        timestamp: tick.adjustedTimestamp,
-        price: midPrice,
-        volume: 0, // NBBO data doesn't have trade volume
-        side: 'trade' as const,
-        metadata: {
-          bid: bidPrice,
-          ask: askPrice,
-          bidSize: parseFloat(tick.bid_size || tick.sizeBid || '0'),
-          askSize: parseFloat(tick.ask_size || tick.sizeAsk || '0'),
-          nbbo: tick.nbbo,
-          exchanges: tick.exchanges,
-        },
+        return {
+          timestamp: tick.adjustedTimestamp,
+          price: midPrice,
+          volume: 0, // NBBO data doesn't have trade volume
+          side: 'trade' as const,
+          metadata: {
+            bid: bidPrice,
+            ask: askPrice,
+            bidSize: parseFloat(tick.bid_size || tick.sizeBid || '0'),
+            askSize: parseFloat(tick.ask_size || tick.sizeAsk || '0'),
+            nbbo: tick.nbbo,
+            exchanges: tick.exchanges,
+          },
       };
     });
   }
