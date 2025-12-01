@@ -1,0 +1,31 @@
+{
+  "name": "momentum-stock-replay",
+  "version": "1.0.0",
+  "description": "Interactive web application for replaying and analyzing high-momentum stock price action",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "app"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=app",
+    "build": "npm run build --workspace=packages/replay-engine && npm run build --workspace=app",
+    "test": "npm run test --workspaces --if-present",
+    "test:replay-engine": "npm run test --workspace=packages/replay-engine",
+    "test:app": "npm run test --workspace=app",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepentropy/momentum-stock-replay.git"
+  },
+  "keywords": [
+    "trading",
+    "replay",
+    "market-data",
+    "visualization",
+    "charts"
+  ],
+  "author": "",
+  "license": "MIT"
+}

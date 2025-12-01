@@ -104,7 +104,35 @@ function parseInterval(interval: string): number {
 }
 
 /**
- * SessionDataProvider - OakView data provider that uses ReplayEngine for tick-by-tick replay
+ * SessionDataProvider - OakView data provider for Momentum Stock Replay
+ * 
+ * This provider bridges OakView's data provider interface with the replay-engine,
+ * enabling tick-by-tick playback of historical trading sessions.
+ * 
+ * @implements {OakViewDataProvider}
+ * 
+ * @example
+ * ```typescript
+ * const provider = new SessionDataProvider();
+ * await provider.initialize({});
+ * await provider.loadSession('AAPL-20231115');
+ * provider.play();
+ * ```
+ * 
+ * @example
+ * ```typescript
+ * // Subscribe to state changes
+ * const engine = provider.getReplayEngine();
+ * engine.on('stateChange', (state) => {
+ *   console.log('Status:', state.status, 'Progress:', state.currentTime);
+ * });
+ * 
+ * // Control playback
+ * provider.play();
+ * provider.setSpeed(10); // 10x speed
+ * provider.seekToPercent(50); // Jump to 50%
+ * provider.pause();
+ * ```
  */
 export class SessionDataProvider implements OakViewDataProvider {
   private replayEngine: ReplayEngine;
