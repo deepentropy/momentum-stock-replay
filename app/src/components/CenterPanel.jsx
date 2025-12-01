@@ -3,7 +3,7 @@ import ControlsBar from "./ControlsBar";
 import ChartArea from "./ChartArea";
 import SessionSearchModal from "./SessionSearchModal";
 import { api } from "../utils/api";
-// Import SessionDataProvider for OakView integration
+// Import SessionDataProvider for replay engine integration
 import { SessionDataProvider } from "../providers/SessionDataProvider";
 
 const CenterPanel = forwardRef(({ 
@@ -19,30 +19,37 @@ const CenterPanel = forwardRef(({
   setTimeframe, 
   onOpenSettings, 
   positionSummary,
-  // New prop to enable OakView provider mode
-  useOakViewMode = false,
 }, ref) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
   const [previewData, setPreviewData] = useState(null);
   
-  // Create provider instance for OakView mode
+  // Create provider instance for replay engine
   const provider = useMemo(() => {
-    if (!useOakViewMode) return null;
     return new SessionDataProvider();
-  }, [useOakViewMode]);
+  }, []);
   
-  // Clean up provider on unmount
+  // Initialize provider on mount
   useEffect(() => {
-    return () => {
-      if (provider) {
-        provider.disconnect();
+    const initProvider = async () => {
+      try {
+        await provider.initialize({});
+        console.log('✅ SessionDataProvider initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize provider:', error);
       }
+    };
+    
+    initProvider();
+    
+    // Clean up provider on unmount
+    return () => {
+      provider.disconnect();
     };
   }, [provider]);
   
-  // Handle chart ready callback for OakView mode
+  // Handle chart ready callback
   const handleChartReady = useCallback((oakView) => {
     console.log('📊 OakView chart ready:', oakView);
   }, []);
@@ -278,8 +285,6 @@ const CenterPanel = forwardRef(({
         <div className="flex-shrink-0">
           <ControlsBar
             currentSession={currentSession}
-            sessionData={sessionData}
-            setSessionData={setSessionData}
             provider={provider}
             onLoadingChange={onLoadingChange}
           />

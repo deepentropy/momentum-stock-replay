@@ -10,6 +10,8 @@ export interface UseReplayReturn {
   state: ReplayState | null;
   /** Progress percentage (0-100) */
   progress: number;
+  /** Whether replay is idle (not started) */
+  isIdle: boolean;
   /** Whether playback is active */
   isPlaying: boolean;
   /** Whether playback is paused */
@@ -22,6 +24,10 @@ export interface UseReplayReturn {
   availableSpeeds: number[];
   /** Current time formatted as string */
   currentTimeFormatted: string;
+  /** Start time formatted as string */
+  startTimeFormatted: string;
+  /** End time formatted as string */
+  endTimeFormatted: string;
   /** Duration formatted as string */
   durationFormatted: string;
   /** Start playback */
@@ -115,6 +121,10 @@ export function useReplay(provider: SessionDataProvider | null): UseReplayReturn
     return (elapsed / duration) * 100;
   }, [state]);
 
+  const isIdle = useMemo(() => {
+    return state?.status === 'idle';
+  }, [state]);
+
   const isPlaying = useMemo(() => {
     return state?.status === 'playing';
   }, [state]);
@@ -134,6 +144,14 @@ export function useReplay(provider: SessionDataProvider | null): UseReplayReturn
   const currentTimeFormatted = useMemo(() => {
     return formatTime(state?.currentTime ?? 0);
   }, [state?.currentTime]);
+
+  const startTimeFormatted = useMemo(() => {
+    return formatTime(state?.startTime ?? 0);
+  }, [state?.startTime]);
+
+  const endTimeFormatted = useMemo(() => {
+    return formatTime(state?.endTime ?? 0);
+  }, [state?.endTime]);
 
   const durationFormatted = useMemo(() => {
     if (!state) return '--:--';
@@ -178,12 +196,15 @@ export function useReplay(provider: SessionDataProvider | null): UseReplayReturn
   return {
     state,
     progress,
+    isIdle,
     isPlaying,
     isPaused,
     hasEnded,
     speed,
     availableSpeeds,
     currentTimeFormatted,
+    startTimeFormatted,
+    endTimeFormatted,
     durationFormatted,
     play,
     pause,
