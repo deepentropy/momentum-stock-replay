@@ -102,7 +102,8 @@ export default function ControlsBar({
   }, [currentSession, isIdle, isLoading]);
 
   // Determine if controls should be disabled
-  const hasData = state && state.startTime !== state.endTime;
+  const hasData = state && state.startTime > 0 && state.endTime > 0 && state.startTime !== state.endTime;
+  const progressValue = hasData ? progress : 0;
   const canPlay = Boolean(currentSession && provider);
   const canStop = isPlaying || isPaused || hasEnded;
 
@@ -214,7 +215,7 @@ export default function ControlsBar({
             {/* Progress fill */}
             <div 
               className="absolute left-0 h-1 bg-[#2962FF] rounded-full transition-all"
-              style={{ width: `${hasData ? progress : 0}%` }}
+              style={{ width: `${progressValue}%` }}
             />
             
             {/* Slider input (invisible but functional) */}
@@ -223,7 +224,7 @@ export default function ControlsBar({
               min="0"
               max="100"
               step="0.1"
-              value={hasData ? progress : 0}
+              value={progressValue}
               onChange={handleSeek}
               disabled={!hasData}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-default"
@@ -232,7 +233,7 @@ export default function ControlsBar({
             {/* Thumb indicator */}
             <div 
               className="absolute w-3 h-3 bg-[#2962FF] rounded-full shadow-lg transform -translate-x-1/2 pointer-events-none group-hover:scale-125 transition-transform"
-              style={{ left: `${hasData ? progress : 0}%` }}
+              style={{ left: `${progressValue}%` }}
             />
           </div>
           
