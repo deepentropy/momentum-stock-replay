@@ -11,7 +11,8 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "@deepentropy/oakscriptjs": "npm:@jsr/deepentropy__oakscriptjs@^0.1.0",
+    "@deepentropy/oakscriptjs": "github:deepentropy/oakscriptJS",
+    "@deepentropy/oakview": "github:deepentropy/oakview",
     "lightweight-charts": "^5.0.9",
     "pako": "^2.1.0",
     "react": "^19.0.0",

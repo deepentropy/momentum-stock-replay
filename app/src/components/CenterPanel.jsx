@@ -1,14 +1,51 @@
-import React, { useState, useEffect, forwardRef } from "react";
+import React, { useState, useEffect, forwardRef, useMemo, useCallback } from "react";
 import ControlsBar from "./ControlsBar";
 import ChartArea from "./ChartArea";
 import SessionSearchModal from "./SessionSearchModal";
 import { api } from "../utils/api";
+// Import SessionDataProvider for OakView integration
+import { SessionDataProvider } from "../providers/SessionDataProvider";
 
-const CenterPanel = forwardRef(({ currentSession, sessionData, setSessionData, isLoading, onLoadingChange, onSelectSession, chartType, setChartType, timeframe, setTimeframe, onOpenSettings, positionSummary }, ref) => {
+const CenterPanel = forwardRef(({ 
+  currentSession, 
+  sessionData, 
+  setSessionData, 
+  isLoading, 
+  onLoadingChange, 
+  onSelectSession, 
+  chartType, 
+  setChartType, 
+  timeframe, 
+  setTimeframe, 
+  onOpenSettings, 
+  positionSummary,
+  // New prop to enable OakView provider mode
+  useOakViewMode = false,
+}, ref) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [showChartTypeMenu, setShowChartTypeMenu] = useState(false);
   const [showTimeframeMenu, setShowTimeframeMenu] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  
+  // Create provider instance for OakView mode
+  const provider = useMemo(() => {
+    if (!useOakViewMode) return null;
+    return new SessionDataProvider();
+  }, [useOakViewMode]);
+  
+  // Clean up provider on unmount
+  useEffect(() => {
+    return () => {
+      if (provider) {
+        provider.disconnect();
+      }
+    };
+  }, [provider]);
+  
+  // Handle chart ready callback for OakView mode
+  const handleChartReady = useCallback((oakView) => {
+    console.log('📊 OakView chart ready:', oakView);
+  }, []);
 
   const chartTypeIcons = {
     line: (
@@ -231,6 +268,8 @@ const CenterPanel = forwardRef(({ currentSession, sessionData, setSessionData, i
           timeframe={timeframe}
           previewData={previewData}
           positionSummary={positionSummary}
+          provider={provider}
+          onChartReady={handleChartReady}
         />
       </div>
 
@@ -241,6 +280,7 @@ const CenterPanel = forwardRef(({ currentSession, sessionData, setSessionData, i
             currentSession={currentSession}
             sessionData={sessionData}
             setSessionData={setSessionData}
+            provider={provider}
             onLoadingChange={onLoadingChange}
           />
         </div>

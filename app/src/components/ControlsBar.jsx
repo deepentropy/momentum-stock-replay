@@ -1,14 +1,26 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useTickPlayer } from "../hooks/useTickPlayer";
+import { useReplay } from "../hooks/useReplay";
 import { api } from "../utils/api";
 
-export default function ControlsBar({ currentSession, sessionData, setSessionData, onLoadingChange }) {
+export default function ControlsBar({ 
+  currentSession, 
+  sessionData, 
+  setSessionData, 
+  onLoadingChange,
+  // New props for provider-based replay
+  provider = null,
+}) {
   const [status, setStatus] = useState('disconnected');
   const [error, setError] = useState(null);
   const [tickData, setTickData] = useState(null);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(null);
   const [showPlayTooltip, setShowPlayTooltip] = useState(false);
+
+  // Use the replay hook when provider is available
+  const replay = useReplay(provider);
+  const useProviderMode = Boolean(provider);
 
   const handleTick = useCallback((tick, virtualTime) => {
     setError(null);
