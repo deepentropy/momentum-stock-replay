@@ -5,6 +5,8 @@ nul
 .claude/
 summary/*
 node_modules
+dist/
+
 # Security - credentials and sensitive data
 .env
 .env.local
