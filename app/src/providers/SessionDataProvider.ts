@@ -420,9 +420,23 @@ export class SessionDataProvider implements OakViewDataProvider {
       throw new Error(`No ticks found for session: ${sessionId}`);
     }
 
-    // Load into replay engine
+    // Load into replay engine with bar callback for OakView updates
     this.replayEngine.load(ticks, {
       barInterval: intervalSeconds,
+      onBar: (bar: ReplayableBar, _state: ReplayState) => {
+        // Convert ReplayableBar to OHLCVBar and emit to OakView
+        if (this.subscriptionCallback) {
+          const ohlcvBar: OHLCVBar = {
+            time: bar.time,
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+            volume: bar.volume,
+          };
+          this.subscriptionCallback(ohlcvBar);
+        }
+      },
     });
   }
 
