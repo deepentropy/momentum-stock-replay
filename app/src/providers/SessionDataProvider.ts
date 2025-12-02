@@ -144,7 +144,8 @@ export class SessionDataProvider implements OakViewDataProvider {
   private isInitialized: boolean = false;
   private subscriptionCallback: SubscriptionCallback | null = null;
   private currentUnsubscribe: (() => void) | null = null;
-  private oakViewBarCallback: ((bar: OHLCVBar) => void) | null = null;
+  private oakViewBarCallback: ((bar: OHLCVBar, isFirstBar: boolean) => void) | null = null;
+  private playbackStarted: boolean = false;
 
   constructor() {
     this.replayEngine = new ReplayEngine();
@@ -153,10 +154,20 @@ export class SessionDataProvider implements OakViewDataProvider {
   /**
    * Register a callback for OakView bar updates
    * This should be called by ChartArea when OakView is ready
+   * @param callback - Callback receives bar data and isFirstBar flag to clear preview on first bar
    */
-  setBarCallback(callback: (bar: OHLCVBar) => void): void {
+  setBarCallback(callback: (bar: OHLCVBar, isFirstBar: boolean) => void): void {
     this.oakViewBarCallback = callback;
     console.log('✅ OakView bar callback registered');
+  }
+
+  /**
+   * Reset playback state - should be called when replay is stopped
+   * This allows preview to be displayed again for the next playback
+   */
+  resetPlaybackState(): void {
+    this.playbackStarted = false;
+    console.log('🔄 Playback state reset');
   }
 
   /**
@@ -428,6 +439,9 @@ export class SessionDataProvider implements OakViewDataProvider {
     this.currentSymbol = sessionId;
     this.currentInterval = intervalSeconds;
 
+    // Reset playback state when loading a new session
+    this.playbackStarted = false;
+
     // Ensure ticks are loaded
     if (!this.tickCache.has(sessionId)) {
       await this.fetchHistorical(sessionId, `${intervalSeconds}S`);
@@ -442,6 +456,12 @@ export class SessionDataProvider implements OakViewDataProvider {
     this.replayEngine.load(ticks, {
       barInterval: intervalSeconds,
       onBar: (bar: ReplayableBar, _state: ReplayState) => {
+        // Check if this is the first bar of playback
+        const isFirstBar = !this.playbackStarted;
+        if (isFirstBar) {
+          this.playbackStarted = true;
+        }
+
         const ohlcvBar: OHLCVBar = {
           time: bar.time,
           open: bar.open,
@@ -451,9 +471,9 @@ export class SessionDataProvider implements OakViewDataProvider {
           volume: bar.volume,
         };
         
-        // Notify OakView via registered callback
+        // Notify OakView via registered callback with isFirstBar flag
         if (this.oakViewBarCallback) {
-          this.oakViewBarCallback(ohlcvBar);
+          this.oakViewBarCallback(ohlcvBar, isFirstBar);
         }
         
         // Also notify via subscription callback if available

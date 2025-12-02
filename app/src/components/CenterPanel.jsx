@@ -120,6 +120,8 @@ const CenterPanel = forwardRef(({
               quoteCount: 0,
             }
           }));
+          // Reset playback state in provider to allow preview on next playback
+          provider.resetPlaybackState?.();
         }
       } catch (error) {
         console.error('❌ Error processing state change:', error);
