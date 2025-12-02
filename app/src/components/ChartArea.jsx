@@ -86,6 +86,18 @@ const ChartArea = forwardRef(({
       try {
         await provider.initialize({});
         oakView.setDataProvider(provider);
+        
+        // Register bar callback to update OakView chart during playback
+        if (provider.setBarCallback) {
+          provider.setBarCallback((bar) => {
+            // Get the series from OakView and update it with the new bar
+            const series = oakView.getSeries?.();
+            if (series && series.update) {
+              series.update(bar);
+            }
+          });
+        }
+        
         onChartReady?.(oakView);
         console.log('✅ OakView provider initialized');
       } catch (error) {
@@ -97,6 +109,7 @@ const ChartArea = forwardRef(({
     
     return () => {
       oakView.removeEventListener('symbol-change', handleSymbolChange);
+      provider.clearBarCallback?.();
       provider.disconnect();
     };
   }, [provider, onChartReady, onSessionChange]);

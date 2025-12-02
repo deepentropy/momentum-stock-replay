@@ -144,9 +144,26 @@ export class SessionDataProvider implements OakViewDataProvider {
   private isInitialized: boolean = false;
   private subscriptionCallback: SubscriptionCallback | null = null;
   private currentUnsubscribe: (() => void) | null = null;
+  private oakViewBarCallback: ((bar: OHLCVBar) => void) | null = null;
 
   constructor() {
     this.replayEngine = new ReplayEngine();
+  }
+
+  /**
+   * Register a callback for OakView bar updates
+   * This should be called by ChartArea when OakView is ready
+   */
+  setBarCallback(callback: (bar: OHLCVBar) => void): void {
+    this.oakViewBarCallback = callback;
+    console.log('✅ OakView bar callback registered');
+  }
+
+  /**
+   * Clear the OakView bar callback
+   */
+  clearBarCallback(): void {
+    this.oakViewBarCallback = null;
   }
 
   /**
@@ -332,6 +349,7 @@ export class SessionDataProvider implements OakViewDataProvider {
    */
   disconnect(): void {
     this.unsubscribeInternal();
+    this.oakViewBarCallback = null;
     this.replayEngine.dispose();
     this.tickCache.clear();
     this.rawTickCache.clear();
@@ -424,16 +442,22 @@ export class SessionDataProvider implements OakViewDataProvider {
     this.replayEngine.load(ticks, {
       barInterval: intervalSeconds,
       onBar: (bar: ReplayableBar, _state: ReplayState) => {
-        // Convert ReplayableBar to OHLCVBar and emit to OakView
+        const ohlcvBar: OHLCVBar = {
+          time: bar.time,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+          volume: bar.volume,
+        };
+        
+        // Notify OakView via registered callback
+        if (this.oakViewBarCallback) {
+          this.oakViewBarCallback(ohlcvBar);
+        }
+        
+        // Also notify via subscription callback if available
         if (this.subscriptionCallback) {
-          const ohlcvBar: OHLCVBar = {
-            time: bar.time,
-            open: bar.open,
-            high: bar.high,
-            low: bar.low,
-            close: bar.close,
-            volume: bar.volume,
-          };
           this.subscriptionCallback(ohlcvBar);
         }
       },
