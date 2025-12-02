@@ -103,16 +103,17 @@ const ChartArea = forwardRef(({
               return;
             }
 
-            // Clear preview data on first bar of playback
             if (isFirstBar) {
               console.log('🔄 Clearing OakView preview, starting live playback');
-              // Set empty data to clear the chart before starting progressive display
+              // Initialize chart with first bar instead of empty array
+              // This properly resets the chart and avoids the "Cannot update oldest data" error
               if (chartElement.setData) {
-                chartElement.setData([]);
+                chartElement.setData([bar]);
               }
+              return; // Don't call updateRealtime for first bar since setData already added it
             }
             
-            // Update with new bar using chart element's realtime update method
+            // Subsequent bars use updateRealtime for efficient incremental updates
             if (chartElement.updateRealtime) {
               chartElement.updateRealtime(bar);
             } else {
