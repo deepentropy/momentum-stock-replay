@@ -90,10 +90,16 @@ const ChartArea = forwardRef(({
         // Register bar callback to update OakView chart during playback
         if (provider.setBarCallback) {
           provider.setBarCallback((bar, isFirstBar) => {
-            // Get the actual chart component inside oak-view layout
-            const chartElement = oakView.getChartAt?.(0);
+            // Get the actual chart component inside oak-view layout.
+            // oak-view is a layout wrapper that can contain multiple charts.
+            // We use index 0 as this layout uses a single chart configuration.
+            if (typeof oakView.getChartAt !== 'function') {
+              console.warn('⚠️ oak-view does not have getChartAt method');
+              return;
+            }
+            const chartElement = oakView.getChartAt(0);
             if (!chartElement) {
-              console.warn('⚠️ No chart element found in oak-view');
+              console.warn('⚠️ No chart element found in oak-view at index 0');
               return;
             }
 
