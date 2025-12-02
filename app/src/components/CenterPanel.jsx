@@ -46,6 +46,81 @@ const CenterPanel = forwardRef(({
     };
   }, [provider]);
   
+  // Subscribe to replay engine tick events to update sessionData
+  useEffect(() => {
+    if (!provider) return;
+    
+    const engine = provider.getReplayEngine();
+    
+    // Handler for tick events - updates sessionData with current quote
+    const handleTick = (tick, state) => {
+      const metadata = tick.metadata || {};
+      
+      // Build quote object from tick data
+      const quote = {
+        t: tick.timestamp,
+        bid: metadata.bid || tick.price,
+        ask: metadata.ask || tick.price,
+        bidSize: metadata.bidSize || 0,
+        askSize: metadata.askSize || 0,
+        exchanges: metadata.exchanges || [],
+        nbbo: metadata.nbbo || false,
+      };
+      
+      // Update sessionData with new quote
+      setSessionData(prev => ({
+        ...prev,
+        quote,
+        stats: {
+          ...prev.stats,
+          quoteCount: (prev.stats?.quoteCount || 0) + 1,
+        }
+      }));
+    };
+    
+    // Subscribe to tick events
+    const unsubscribe = engine.on('tick', handleTick);
+    
+    // Also listen for ended to log completion
+    const handleEnded = () => {
+      console.log('📊 Replay ended');
+    };
+    
+    const unsubscribeEnded = engine.on('ended', handleEnded);
+    
+    return () => {
+      unsubscribe();
+      unsubscribeEnded();
+    };
+  }, [provider, setSessionData]);
+  
+  // Listen for state changes to detect stop and reset sessionData
+  useEffect(() => {
+    if (!provider) return;
+    
+    const engine = provider.getReplayEngine();
+    
+    const handleStateChange = (state) => {
+      // When replay is stopped (idle), reset quote count to allow preview
+      if (state.status === 'idle') {
+        setSessionData(prev => ({
+          ...prev,
+          quote: null,
+          stats: {
+            ...prev.stats,
+            quoteCount: 0,
+          }
+        }));
+      }
+    };
+    
+    const unsubscribe = engine.on('stateChange', handleStateChange);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [provider, setSessionData]);
+  
   // Handle chart ready callback
   const handleChartReady = useCallback((oakView) => {
     console.log('📊 OakView chart ready:', oakView);
