@@ -4,23 +4,34 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "Building @deepentropy/oakscriptjs..."
-cd node_modules/@deepentropy/oakscriptjs/oakscriptjs
-npm install
-npm run build
-cp -r dist ../
-cp package.json ../
-cd ../../../..
+OAKSCRIPTJS_DIR="$ROOT_DIR/node_modules/@deepentropy/oakscriptjs"
+if [ -d "$OAKSCRIPTJS_DIR/oakscriptjs" ]; then
+  cd "$OAKSCRIPTJS_DIR/oakscriptjs"
+  npm install
+  npm run build
+  cp -r dist ../
+  cp package.json ../
+  echo "oakscriptjs build complete."
+else
+  echo "Warning: oakscriptjs directory not found at $OAKSCRIPTJS_DIR/oakscriptjs"
+fi
 
 echo "Building @deepentropy/oakview..."
-# Remove the incomplete oakview package installed by npm
-rm -rf node_modules/@deepentropy/oakview
+OAKVIEW_DIR="$ROOT_DIR/node_modules/@deepentropy/oakview"
+# Remove the incomplete oakview package installed by npm (if it exists)
+if [ -d "$OAKVIEW_DIR" ]; then
+  rm -rf "$OAKVIEW_DIR"
+fi
 
 # Clone the full oakview repo
-git clone --depth 1 https://github.com/deepentropy/oakview.git node_modules/@deepentropy/oakview
-cd node_modules/@deepentropy/oakview
+git clone --depth 1 https://github.com/deepentropy/oakview.git "$OAKVIEW_DIR"
+cd "$OAKVIEW_DIR"
 npm install
 npm run build
-cd ../..
+echo "oakview build complete."
 
 echo "Postinstall complete!"
