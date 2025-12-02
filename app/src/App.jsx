@@ -63,7 +63,6 @@ export default function App() {
             setChartType={setChartType}
             timeframe={timeframe}
             setTimeframe={setTimeframe}
-            onOpenSettings={() => setSettingsOpen(true)}
             positionSummary={positionSummary}
           />
         </div>
@@ -73,6 +72,7 @@ export default function App() {
             sessionData={sessionData}
             onAddMarker={handleAddMarker}
             onPositionChange={handlePositionChange}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
 
