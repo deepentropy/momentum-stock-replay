@@ -50,6 +50,12 @@ const CenterPanel = forwardRef(({
   const handleChartReady = useCallback((oakView) => {
     console.log('📊 OakView chart ready:', oakView);
   }, []);
+  
+  // Handle session change from OakView (sync with React state)
+  const handleSessionChange = useCallback((session) => {
+    console.log('📊 Session selected via OakView:', session.id);
+    onSelectSession(session);
+  }, [onSelectSession]);
 
   // Load preview data when session is selected
   useEffect(() => {
@@ -110,6 +116,7 @@ const CenterPanel = forwardRef(({
           positionSummary={positionSummary}
           provider={provider}
           onChartReady={handleChartReady}
+          onSessionChange={handleSessionChange}
         />
       </div>
 

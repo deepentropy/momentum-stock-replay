@@ -14,7 +14,8 @@ const ChartArea = forwardRef(({
   positionSummary,
   // New prop for OakView integration
   provider = null,
-  onChartReady = null
+  onChartReady = null,
+  onSessionChange = null
 }, ref) => {
   const chartRef = useRef(null);
   const oakViewRef = useRef(null);
@@ -66,6 +67,20 @@ const ChartArea = forwardRef(({
     
     const oakView = oakViewRef.current;
     
+    // Handle symbol-change event to sync session selection with React state
+    const handleSymbolChange = (event) => {
+      const sessionId = event.detail?.symbol;
+      if (sessionId && onSessionChange) {
+        // Retrieve session metadata from the provider
+        const session = provider?.getSession?.(sessionId);
+        if (session) {
+          onSessionChange(session);
+        }
+      }
+    };
+    
+    oakView.addEventListener('symbol-change', handleSymbolChange);
+    
     // Initialize provider and set it on oak-view
     const initProvider = async () => {
       try {
@@ -81,9 +96,10 @@ const ChartArea = forwardRef(({
     initProvider();
     
     return () => {
+      oakView.removeEventListener('symbol-change', handleSymbolChange);
       provider.disconnect();
     };
-  }, [provider, onChartReady]);
+  }, [provider, onChartReady, onSessionChange]);
 
   const updateMarkers = () => {
     // Determine which series to use for markers based on chart type
