@@ -51,31 +51,38 @@ const CenterPanel = forwardRef(({
     if (!provider) return;
     
     const engine = provider.getReplayEngine();
+    if (!engine) return;
     
     // Handler for tick events - updates sessionData with current quote
     const handleTick = (tick, state) => {
-      const metadata = tick.metadata || {};
-      
-      // Build quote object from tick data
-      const quote = {
-        t: tick.timestamp,
-        bid: metadata.bid || tick.price,
-        ask: metadata.ask || tick.price,
-        bidSize: metadata.bidSize || 0,
-        askSize: metadata.askSize || 0,
-        exchanges: metadata.exchanges || [],
-        nbbo: metadata.nbbo || false,
-      };
-      
-      // Update sessionData with new quote
-      setSessionData(prev => ({
-        ...prev,
-        quote,
-        stats: {
-          ...prev.stats,
-          quoteCount: (prev.stats?.quoteCount || 0) + 1,
-        }
-      }));
+      try {
+        if (!tick) return;
+        
+        const metadata = tick.metadata || {};
+        
+        // Build quote object from tick data
+        const quote = {
+          t: tick.timestamp,
+          bid: metadata.bid || tick.price,
+          ask: metadata.ask || tick.price,
+          bidSize: metadata.bidSize || 0,
+          askSize: metadata.askSize || 0,
+          exchanges: metadata.exchanges || [],
+          nbbo: metadata.nbbo || false,
+        };
+        
+        // Update sessionData with new quote
+        setSessionData(prev => ({
+          ...prev,
+          quote,
+          stats: {
+            ...prev.stats,
+            quoteCount: (prev.stats?.quoteCount || 0) + 1,
+          }
+        }));
+      } catch (error) {
+        console.error('❌ Error processing tick event:', error);
+      }
     };
     
     // Subscribe to tick events
@@ -99,18 +106,23 @@ const CenterPanel = forwardRef(({
     if (!provider) return;
     
     const engine = provider.getReplayEngine();
+    if (!engine) return;
     
     const handleStateChange = (state) => {
-      // When replay is stopped (idle), reset quote count to allow preview
-      if (state.status === 'idle') {
-        setSessionData(prev => ({
-          ...prev,
-          quote: null,
-          stats: {
-            ...prev.stats,
-            quoteCount: 0,
-          }
-        }));
+      try {
+        // When replay is stopped (idle), reset quote count to allow preview
+        if (state?.status === 'idle') {
+          setSessionData(prev => ({
+            ...prev,
+            quote: null,
+            stats: {
+              ...prev.stats,
+              quoteCount: 0,
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('❌ Error processing state change:', error);
       }
     };
     
