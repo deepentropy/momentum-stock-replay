@@ -90,21 +90,34 @@ const ChartArea = forwardRef(({
         // Register bar callback to update OakView chart during playback
         if (provider.setBarCallback) {
           provider.setBarCallback((bar, isFirstBar) => {
+            // Get the actual chart component inside oak-view layout.
+            // oak-view is a layout wrapper that can contain multiple charts.
+            // We use index 0 as this layout uses a single chart configuration.
+            if (typeof oakView.getChartAt !== 'function') {
+              console.warn('⚠️ oak-view does not have getChartAt method');
+              return;
+            }
+            const chartElement = oakView.getChartAt(0);
+            if (!chartElement) {
+              console.warn('⚠️ No chart element found in oak-view at index 0');
+              return;
+            }
+
             // Clear preview data on first bar of playback
             if (isFirstBar) {
               console.log('🔄 Clearing OakView preview, starting live playback');
               // Set empty data to clear the chart before starting progressive display
-              if (oakView.setData) {
-                oakView.setData([]);
+              if (chartElement.setData) {
+                chartElement.setData([]);
               }
             }
             
-            // Update with new bar using OakView's realtime update method
-            if (oakView.updateRealtime) {
-              oakView.updateRealtime(bar);
+            // Update with new bar using chart element's realtime update method
+            if (chartElement.updateRealtime) {
+              chartElement.updateRealtime(bar);
             } else {
               // Fallback to series.update if updateRealtime is not available
-              const series = oakView.getSeries?.();
+              const series = chartElement.getSeries?.();
               if (series && series.update) {
                 series.update(bar);
               }
