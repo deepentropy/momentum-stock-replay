@@ -89,11 +89,25 @@ const ChartArea = forwardRef(({
         
         // Register bar callback to update OakView chart during playback
         if (provider.setBarCallback) {
-          provider.setBarCallback((bar) => {
-            // Get the series from OakView and update it with the new bar
-            const series = oakView.getSeries?.();
-            if (series && series.update) {
-              series.update(bar);
+          provider.setBarCallback((bar, isFirstBar) => {
+            // Clear preview data on first bar of playback
+            if (isFirstBar) {
+              console.log('🔄 Clearing OakView preview, starting live playback');
+              // Set empty data to clear the chart before starting progressive display
+              if (oakView.setData) {
+                oakView.setData([]);
+              }
+            }
+            
+            // Update with new bar using OakView's realtime update method
+            if (oakView.updateRealtime) {
+              oakView.updateRealtime(bar);
+            } else {
+              // Fallback to series.update if updateRealtime is not available
+              const series = oakView.getSeries?.();
+              if (series && series.update) {
+                series.update(bar);
+              }
             }
           });
         }

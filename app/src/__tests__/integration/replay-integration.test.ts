@@ -8,10 +8,16 @@ vi.mock('../../utils/api', () => ({
     getSessions: vi.fn(() => Promise.resolve([
       { id: 'TEST-20231115', name: 'TEST Session', symbol: 'TEST', date: '2023-11-15', size: 1000, download_url: '', px_start: 100, px_end: 110, duration_m: 30, tickCount: 1000 }
     ])),
-    loadSessionData: vi.fn(() => Promise.resolve([
-      { adjustedTimestamp: 1700000000, bid_price: '100.00', ask_price: '100.05', bid_size: '100', ask_size: '200' },
-      { adjustedTimestamp: 1700000001, bid_price: '100.02', ask_price: '100.07', bid_size: '150', ask_size: '180' },
-    ]))
+    loadSessionData: vi.fn(() => Promise.resolve(
+      // Generate 100 ticks spanning 100 seconds to ensure multiple bars at 10s interval
+      Array.from({ length: 100 }, (_, i) => ({
+        adjustedTimestamp: 1700000000 + i,
+        bid_price: (100 + i * 0.01).toFixed(2),
+        ask_price: (100.05 + i * 0.01).toFixed(2),
+        bid_size: '100',
+        ask_size: '200'
+      }))
+    ))
   }
 }));
 
@@ -329,6 +335,108 @@ describe('Replay Integration', () => {
       
       // After disconnect, the callback should not be called
       // This is tested indirectly - if no error occurs, the test passes
+    });
+
+    it('should pass isFirstBar=true on first bar and isFirstBar=false on subsequent bars', async () => {
+      await provider.initialize({});
+      
+      // Set up callback that tracks isFirstBar
+      const barCalls: { bar: any; isFirstBar: boolean }[] = [];
+      provider.setBarCallback((bar, isFirstBar) => {
+        barCalls.push({ bar, isFirstBar });
+      });
+
+      // Load session which sets up the onBar callback with isFirstBar tracking
+      await provider.loadSession('TEST-20231115', 10);
+
+      // Set speed high to process data quickly
+      provider.setSpeed(100);
+      provider.play();
+      
+      // Advance time to let playback process ticks and emit bars
+      vi.advanceTimersByTime(5000);
+
+      // Verify that at least one bar was emitted
+      expect(barCalls.length).toBeGreaterThan(0);
+      
+      // First bar should have isFirstBar=true
+      expect(barCalls[0].isFirstBar).toBe(true);
+      
+      // If there are more bars, they should have isFirstBar=false
+      if (barCalls.length > 1) {
+        expect(barCalls[1].isFirstBar).toBe(false);
+      }
+    });
+
+    it('should reset playbackStarted flag when resetPlaybackState is called', async () => {
+      await provider.initialize({});
+      
+      // Set up callback that tracks isFirstBar
+      const barCalls: { bar: any; isFirstBar: boolean }[] = [];
+      provider.setBarCallback((bar, isFirstBar) => {
+        barCalls.push({ bar, isFirstBar });
+      });
+
+      // Load session and play once
+      await provider.loadSession('TEST-20231115', 10);
+      provider.setSpeed(100);
+      provider.play();
+      vi.advanceTimersByTime(5000);
+      provider.stop();
+
+      // First playback should have isFirstBar=true on first bar
+      expect(barCalls.length).toBeGreaterThan(0);
+      expect(barCalls[0].isFirstBar).toBe(true);
+
+      // Clear the recorded calls
+      barCalls.length = 0;
+
+      // Reset playback state
+      provider.resetPlaybackState();
+
+      // Reload and play again
+      await provider.loadSession('TEST-20231115', 10);
+      provider.setSpeed(100);
+      provider.play();
+      vi.advanceTimersByTime(5000);
+
+      // After reset, first bar should again have isFirstBar=true
+      expect(barCalls.length).toBeGreaterThan(0);
+      expect(barCalls[0].isFirstBar).toBe(true);
+    });
+
+    it('should reset playbackStarted flag when loading a new session', async () => {
+      await provider.initialize({});
+      
+      // Set up callback that tracks isFirstBar
+      const barCalls: { bar: any; isFirstBar: boolean }[] = [];
+      provider.setBarCallback((bar, isFirstBar) => {
+        barCalls.push({ bar, isFirstBar });
+      });
+
+      // Load session and play
+      await provider.loadSession('TEST-20231115', 10);
+      provider.setSpeed(100);
+      provider.play();
+      vi.advanceTimersByTime(5000);
+      provider.stop();
+
+      // First bar should have isFirstBar=true
+      expect(barCalls[0].isFirstBar).toBe(true);
+
+      // Clear calls
+      barCalls.length = 0;
+
+      // Load the same session again (simulating session reload)
+      await provider.loadSession('TEST-20231115', 10);
+      provider.setSpeed(100);
+      provider.play();
+      vi.advanceTimersByTime(5000);
+
+      // First bar of the reloaded session should also have isFirstBar=true
+      // because loadSession resets playbackStarted
+      expect(barCalls.length).toBeGreaterThan(0);
+      expect(barCalls[0].isFirstBar).toBe(true);
     });
   });
 });
