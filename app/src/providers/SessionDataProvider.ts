@@ -1,11 +1,12 @@
-import type { 
-  OakViewDataProvider, 
-  OHLCVBar, 
-  SymbolInfo, 
-  DataProviderConfig, 
-  SubscriptionCallback, 
-  UnsubscribeFunction 
+import type {
+  OakViewDataProvider,
+  OHLCVBar,
+  SymbolInfo,
+  DataProviderConfig,
+  SubscriptionCallback,
+  UnsubscribeFunction
 } from '@deepentropy/oakview';
+import { eventBus, setInterval as setOakViewInterval, createPaneId } from '@deepentropy/oakview';
 import { ReplayEngine, TickData, ReplayableBar, ReplayState } from '@momentum/replay-engine';
 import { api } from '../utils/api';
 
@@ -149,6 +150,20 @@ export class SessionDataProvider implements OakViewDataProvider {
 
   constructor() {
     this.replayEngine = new ReplayEngine();
+  }
+
+  /**
+   * Get the current interval in seconds
+   */
+  getCurrentInterval(): number {
+    return this.currentInterval;
+  }
+
+  /**
+   * Get the current interval as a string label (e.g., '10S', '1m')
+   */
+  getCurrentIntervalLabel(): string {
+    return INTERVAL_LABELS[this.currentInterval] || `${this.currentInterval}S`;
   }
 
   /**
@@ -452,16 +467,35 @@ export class SessionDataProvider implements OakViewDataProvider {
       throw new Error(`No ticks found for session: ${sessionId}`);
     }
 
-    // Load into replay engine with bar callback for OakView updates
+    // Load into replay engine with tick and bar callbacks for OakView updates
     this.replayEngine.load(ticks, {
       barInterval: intervalSeconds,
-      onBar: (bar: ReplayableBar, _state: ReplayState) => {
-        // Check if this is the first bar of playback
-        const isFirstBar = !this.playbackStarted;
-        if (isFirstBar) {
+      onTick: (_tick: TickData, _state: ReplayState) => {
+        // Get the current forming bar from the replay engine
+        const currentBar = this.replayEngine.getCurrentBar();
+        if (!currentBar) return;
+
+        // Check if this is the first tick of playback
+        const isFirstTick = !this.playbackStarted;
+        if (isFirstTick) {
           this.playbackStarted = true;
         }
 
+        const ohlcvBar: OHLCVBar = {
+          time: currentBar.time,
+          open: currentBar.open,
+          high: currentBar.high,
+          low: currentBar.low,
+          close: currentBar.close,
+          volume: currentBar.volume,
+        };
+
+        // Notify OakView via registered callback - updates chart on every tick
+        if (this.oakViewBarCallback) {
+          this.oakViewBarCallback(ohlcvBar, isFirstTick);
+        }
+      },
+      onBar: (bar: ReplayableBar, _state: ReplayState) => {
         const ohlcvBar: OHLCVBar = {
           time: bar.time,
           open: bar.open,
@@ -470,17 +504,21 @@ export class SessionDataProvider implements OakViewDataProvider {
           close: bar.close,
           volume: bar.volume,
         };
-        
-        // Notify OakView via registered callback with isFirstBar flag
-        if (this.oakViewBarCallback) {
-          this.oakViewBarCallback(ohlcvBar, isFirstBar);
-        }
-        
-        // Also notify via subscription callback if available
+
+        // Notify via subscription callback if available (for completed bars)
         if (this.subscriptionCallback) {
           this.subscriptionCallback(ohlcvBar);
         }
       },
+    });
+
+    // Emit interval change event to update OakView toolbar
+    const intervalLabel = this.getCurrentIntervalLabel();
+    console.log(`📊 Emitting interval change: ${intervalLabel}`);
+    eventBus.emit('pane:interval:changed', {
+      paneId: createPaneId('0'),
+      interval: intervalLabel,
+      previousInterval: '1D',
     });
   }
 

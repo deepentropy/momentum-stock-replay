@@ -13,8 +13,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@deepentropy/oakscriptjs": "github:deepentropy/oakscriptJS",
-    "@deepentropy/oakview": "github:deepentropy/oakview",
+    "@deepentropy/oakscriptjs": "^1.0.0",
+    "@deepentropy/oakview": "^1.0.0",
     "lightweight-charts": "^5.0.9",
     "pako": "^2.1.0",
     "react": "^19.0.0",

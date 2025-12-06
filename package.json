@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "npm run dev --workspace=app",
     "build": "npm run build --workspace=packages/replay-engine && npm run build --workspace=app",
-    "postinstall": "bash scripts/postinstall.sh",
     "test": "npm run test --workspaces --if-present",
     "test:replay-engine": "npm run test --workspace=packages/replay-engine",
     "test:app": "npm run test --workspace=app",

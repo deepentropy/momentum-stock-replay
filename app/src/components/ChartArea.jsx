@@ -4,6 +4,7 @@ import LoadingSpinner from "./LoadingSpinner";
 import { ta } from '@deepentropy/oakscriptjs';
 // Import OakView for optional use with data provider
 import '@deepentropy/oakview';
+import { eventBus } from '@deepentropy/oakview';
 
 const ChartArea = forwardRef(({ 
   sessionData, 
@@ -67,19 +68,16 @@ const ChartArea = forwardRef(({
     
     const oakView = oakViewRef.current;
     
-    // Handle symbol-change event to sync session selection with React state
-    const handleSymbolChange = (event) => {
-      const sessionId = event.detail?.symbol;
-      if (sessionId && onSessionChange) {
+    // Subscribe to EventBus for symbol changes (new OakView architecture)
+    const unsubscribeSymbolChange = eventBus.on('pane:symbol:changed', ({ paneId, symbol }) => {
+      if (onSessionChange) {
         // Retrieve session metadata from the provider
-        const session = provider?.getSession?.(sessionId);
+        const session = provider?.getSession?.(symbol);
         if (session) {
           onSessionChange(session);
         }
       }
-    };
-    
-    oakView.addEventListener('symbol-change', handleSymbolChange);
+    });
     
     // Initialize provider and set it on oak-view
     const initProvider = async () => {
@@ -136,7 +134,7 @@ const ChartArea = forwardRef(({
     initProvider();
     
     return () => {
-      oakView.removeEventListener('symbol-change', handleSymbolChange);
+      unsubscribeSymbolChange();
       provider.clearBarCallback?.();
       provider.disconnect();
     };

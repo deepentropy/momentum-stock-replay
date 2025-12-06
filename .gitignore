@@ -1,4 +1,5 @@
 .idea/
+.claude/
 .npmrc
 nul
 .tmp
