@@ -13,7 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "oakscriptjs": "^0.1.5",
+    "oakscriptjs": "^0.1.6",
     "oakview": "^0.1.0",
     "lightweight-charts": "^5.0.9",
     "pako": "^2.1.0",
