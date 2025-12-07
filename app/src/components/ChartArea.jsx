@@ -1,10 +1,10 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { createChart, LineSeries, CandlestickSeries } from "lightweight-charts";
 import LoadingSpinner from "./LoadingSpinner";
-import { ta } from '@deepentropy/oakscriptjs';
+import { ta } from 'oakscriptjs';
 // Import OakView for optional use with data provider
-import '@deepentropy/oakview';
-import { eventBus } from '@deepentropy/oakview';
+import 'oakview';
+import { eventBus } from 'oakview';
 
 const ChartArea = forwardRef(({ 
   sessionData, 

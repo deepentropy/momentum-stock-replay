@@ -5,8 +5,8 @@ import type {
   DataProviderConfig,
   SubscriptionCallback,
   UnsubscribeFunction
-} from '@deepentropy/oakview';
-import { eventBus, setInterval as setOakViewInterval, createPaneId } from '@deepentropy/oakview';
+} from 'oakview';
+import { eventBus, setInterval as setOakViewInterval, createPaneId } from 'oakview';
 import { ReplayEngine, TickData, ReplayableBar, ReplayState } from '@momentum/replay-engine';
 import { api } from '../utils/api';
 
