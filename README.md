@@ -15,6 +15,39 @@ Momentum Stock Replay is a real-time market replay tool that allows you to:
 
 Perfect for day traders, researchers, and anyone studying intraday momentum patterns on small-cap stocks with significant run-ups (>30%).
 
+## Architecture
+
+Momentum Stock Replay now uses [OakView](https://github.com/deepentropy/oakview) for chart visualization combined with a custom `replay-engine` for tick-by-tick playback control.
+
+### Key Components
+
+- **OakView**: Web Component wrapper for TradingView's Lightweight Charts
+- **replay-engine**: Framework-agnostic module for replay functionality
+- **SessionDataProvider**: Bridges OakView's data provider interface with replay-engine
+
+### Project Structure
+
+```
+momentum-stock-replay/
+├── app/                          # React web application
+│   ├── src/
+│   │   ├── components/           # UI components
+│   │   ├── hooks/                # React hooks
+│   │   │   └── useReplay.ts      # Replay state hook
+│   │   ├── providers/            # Data providers
+│   │   │   └── SessionDataProvider.ts
+│   │   └── utils/                # Utilities
+│   └── package.json
+├── packages/
+│   └── replay-engine/            # Standalone replay module
+│       ├── src/
+│       │   ├── ReplayEngine.ts   # Core replay logic
+│       │   ├── TickAggregator.ts # Tick to OHLCV conversion
+│       │   └── types.ts          # TypeScript definitions
+│       └── package.json
+└── sessions/                     # Session data files
+```
+
 ## Features
 
 ### Interactive Replay
@@ -65,33 +98,6 @@ The app loads pre-compressed session files from the `sessions/` directory:
 5. **Scrub through time** using the timeline slider
 
 Session files contain pre-processed market data.
-
-## Project Structure
-
-```
-momentum-stock-replay/
-├── app/                        # React web application
-│   ├── src/
-│   │   ├── components/        # UI components
-│   │   │   ├── CenterPanel.jsx       # Main chart area
-│   │   │   ├── OrderBookPanel.jsx    # Order book display
-│   │   │   ├── SettingsPanel.jsx     # Configuration
-│   │   │   ├── SessionPicker.jsx     # Session selector
-│   │   │   └── ...
-│   │   ├── contexts/          # React contexts
-│   │   ├── hooks/             # Custom hooks
-│   │   ├── utils/             # Utilities
-│   │   │   ├── binaryReader.js       # Binary decompressor
-│   │   │   └── chartHelpers.js       # Chart utilities
-│   │   └── App.jsx            # Main app component
-│   ├── public/                # Static assets
-│   ├── index.html
-│   └── package.json
-│
-└── sessions/                   # Compressed binary sessions
-    ├── SYMB-20251114.bin.gz
-    └── ...
-```
 
 ## License
 

@@ -1,10 +1,25 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import { createChart, LineSeries, CandlestickSeries } from "lightweight-charts";
 import LoadingSpinner from "./LoadingSpinner";
-import { ta } from '@deepentropy/oakscriptjs';
+import { ta } from 'oakscriptjs';
+// Import OakView for optional use with data provider
+import 'oakview';
+import { eventBus } from 'oakview';
 
-const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, previewData, positionSummary }, ref) => {
+const ChartArea = forwardRef(({ 
+  sessionData, 
+  isLoading, 
+  chartType, 
+  timeframe, 
+  previewData, 
+  positionSummary,
+  // New prop for OakView integration
+  provider = null,
+  onChartReady = null,
+  onSessionChange = null
+}, ref) => {
   const chartRef = useRef(null);
+  const oakViewRef = useRef(null);
   const chartInstance = useRef(null);
   const seriesRefs = useRef({ bid: null, ask: null, mid: null, candlestick: null, ema9: null, ema20: null, ema9_1m: null, ema20_1m: null, ema9_5m: null, ema20_5m: null, positionAvg: null });
   const resizeObserverRef = useRef(null);
@@ -18,6 +33,9 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
   const aggregatedCandleData = useRef([]);
   const emaData = useRef({ ema9: [], ema20: [], ema9_1m: [], ema20_1m: [], ema9_5m: [], ema20_5m: [] });
   const isPreviewDisplayed = useRef(false);
+  
+  // Track if we're using OakView mode
+  const useOakView = Boolean(provider);
 
   // Expose method to add markers
   useImperativeHandle(ref, () => ({
@@ -28,8 +46,99 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
     clearMarkers: () => {
       markersRef.current = [];
       updateMarkers();
+    },
+    // Expose chart methods for OakView mode
+    getChart: () => {
+      if (useOakView && oakViewRef.current) {
+        return oakViewRef.current.getChart?.();
+      }
+      return chartInstance.current;
+    },
+    getSeries: () => seriesRefs.current,
+    fitContent: () => {
+      if (chartInstance.current) {
+        chartInstance.current.timeScale().fitContent();
+      }
     }
   }));
+  
+  // Set up OakView when provider is available
+  useEffect(() => {
+    if (!provider || !oakViewRef.current) return;
+    
+    const oakView = oakViewRef.current;
+    
+    // Subscribe to EventBus for symbol changes (new OakView architecture)
+    const unsubscribeSymbolChange = eventBus.on('pane:symbol:changed', ({ paneId, symbol }) => {
+      if (onSessionChange) {
+        // Retrieve session metadata from the provider
+        const session = provider?.getSession?.(symbol);
+        if (session) {
+          onSessionChange(session);
+        }
+      }
+    });
+    
+    // Initialize provider and set it on oak-view
+    const initProvider = async () => {
+      try {
+        await provider.initialize({});
+        oakView.setDataProvider(provider);
+        
+        // Register bar callback to update OakView chart during playback
+        if (provider.setBarCallback) {
+          provider.setBarCallback((bar, isFirstBar) => {
+            // Get the actual chart component inside oak-view layout.
+            // oak-view is a layout wrapper that can contain multiple charts.
+            // We use index 0 as this layout uses a single chart configuration.
+            if (typeof oakView.getChartAt !== 'function') {
+              console.warn('⚠️ oak-view does not have getChartAt method');
+              return;
+            }
+            const chartElement = oakView.getChartAt(0);
+            if (!chartElement) {
+              console.warn('⚠️ No chart element found in oak-view at index 0');
+              return;
+            }
+
+            if (isFirstBar) {
+              console.log('🔄 Clearing OakView preview, starting live playback');
+              // Initialize chart with first bar instead of empty array
+              // This properly resets the chart and avoids the "Cannot update oldest data" error
+              if (chartElement.setData) {
+                chartElement.setData([bar]);
+              }
+              return; // Don't call updateRealtime for first bar since setData already added it
+            }
+            
+            // Subsequent bars use updateRealtime for efficient incremental updates
+            if (chartElement.updateRealtime) {
+              chartElement.updateRealtime(bar);
+            } else {
+              // Fallback to series.update if updateRealtime is not available
+              const series = chartElement.getSeries?.();
+              if (series && series.update) {
+                series.update(bar);
+              }
+            }
+          });
+        }
+        
+        onChartReady?.(oakView);
+        console.log('✅ OakView provider initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize OakView provider:', error);
+      }
+    };
+    
+    initProvider();
+    
+    return () => {
+      unsubscribeSymbolChange();
+      provider.clearBarCallback?.();
+      provider.disconnect();
+    };
+  }, [provider, onChartReady, onSessionChange]);
 
   const updateMarkers = () => {
     // Determine which series to use for markers based on chart type
@@ -43,6 +152,8 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
   };
 
   useEffect(() => {
+    // Skip creating the chart if we're using OakView mode
+    if (useOakView) return;
     if (!chartRef.current || chartInstance.current) return;
 
     const chart = createChart(chartRef.current, {
@@ -756,6 +867,22 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
     }
   }, [positionSummary, sessionData.quote]);
 
+  // Render OakView mode
+  if (useOakView) {
+    return (
+      <div className="relative w-full h-full bg-[#131722]">
+        <oak-view
+          ref={oakViewRef}
+          layout="single"
+          theme="dark"
+          style={{ width: '100%', height: '100%' }}
+        />
+        {isLoading && <LoadingSpinner message="Loading Session Data" />}
+      </div>
+    );
+  }
+
+  // Render standard chart mode
   return (
     <div className="relative w-full h-full bg-[#131722]">
       <div ref={chartRef} className="w-full h-full" />
