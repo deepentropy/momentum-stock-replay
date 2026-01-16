@@ -1,6 +1,10 @@
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/deepentropy/momentum-stock-replay/main/sessions';
 const GITHUB_API_BASE = 'https://api.github.com/repos/deepentropy/momentum-stock-replay/contents/sessions';
 
+// Detect if running locally (dev) or on GitHub Pages (production)
+const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const LOCAL_SESSIONS_BASE = '/local-sessions';
+
 // Constants matching your Python script (compress.py)
 const PRICE_SCALE = 100_000; // 5 decimal places precision
 const SIZE_SCALE = 100; // 2 decimal places precision
@@ -8,6 +12,43 @@ const TIME_UNIT = 1_000_000; // µs for tick data
 
 export const api = {
   async getSessions() {
+    if (isLocalDev) {
+      // Use local sessions endpoint served by Vite plugin
+      console.log('📂 Loading sessions from local directory...');
+      const response = await fetch(LOCAL_SESSIONS_BASE);
+      if (!response.ok) {
+        throw new Error('Failed to fetch local sessions');
+      }
+      const files = await response.json();
+
+      return files.map(file => {
+        const nameWithoutExt = file.name.replace('.bin.gz', '');
+        const parts = nameWithoutExt.split('-');
+        const symbol = parts[0];
+        const dateStr = parts[1];
+
+        let formattedDate = dateStr;
+        if (dateStr && dateStr.length === 8) {
+          formattedDate = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+        }
+
+        return {
+          id: nameWithoutExt,
+          name: nameWithoutExt,
+          symbol: symbol,
+          date: formattedDate,
+          size: file.size,
+          download_url: `${LOCAL_SESSIONS_BASE}/${file.name}`,
+          px_start: null,
+          px_end: null,
+          duration_m: null,
+          tickCount: null
+        };
+      });
+    }
+
+    // Production: Use GitHub API
+    console.log('🌐 Loading sessions from GitHub...');
     const response = await fetch(GITHUB_API_BASE);
     if (!response.ok) {
       throw new Error('Failed to fetch sessions from GitHub');
@@ -52,7 +93,12 @@ export const api = {
   },
 
   async loadSessionData(sessionId) {
-    const url = `${GITHUB_RAW_BASE}/${sessionId}.bin.gz`;
+    // Use local endpoint in dev, GitHub raw in production
+    const url = isLocalDev
+      ? `${LOCAL_SESSIONS_BASE}/${sessionId}.bin.gz`
+      : `${GITHUB_RAW_BASE}/${sessionId}.bin.gz`;
+
+    console.log(`📦 Loading session from: ${url}`);
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to load session data: ${response.statusText}`);

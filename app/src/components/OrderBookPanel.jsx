@@ -6,7 +6,9 @@ import { useOrderBook } from "../hooks/useOrderBook";
 export default function OrderBookPanel({ sessionData, onAddMarker, onPositionChange }) {
   const { quote, stats } = sessionData;
   const [positionSize, setPositionSize] = useState(100);
-  const { positions, trades, summary, buy, sell, reset, updateCurrentPrice } = usePositionManager();
+  const { positions, trades, summary, stopLoss, takeProfit, buy, sell, reset, updateCurrentPrice, setStopLoss, setTakeProfit } = usePositionManager();
+  const [slInput, setSlInput] = useState('');
+  const [tpInput, setTpInput] = useState('');
   const { settings } = useSettings();
   const { updateOrderBook, clearOrderBook, getOrderBook } = useOrderBook();
 
@@ -17,12 +19,12 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
     }
   }, [quote, updateCurrentPrice]);
 
-  // Notify parent about position changes
+  // Notify parent about position changes (including SL/TP)
   useEffect(() => {
     if (onPositionChange) {
-      onPositionChange(summary);
+      onPositionChange({ ...summary, stopLoss, takeProfit });
     }
-  }, [summary, onPositionChange]);
+  }, [summary, stopLoss, takeProfit, onPositionChange]);
 
   // Update order book state with exchange snapshots from each tick
   useEffect(() => {
@@ -43,8 +45,8 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
   const handleBuy = () => {
     if (!quote) return;
     const price = quote.ask;
-    buy(positionSize, price);
-    console.log('🟢 BUY executed:', positionSize, '@', price.toFixed(4));
+    const trade = buy(positionSize, price, quote.t); // Pass session time
+    console.log('🟢 BUY executed:', positionSize, '@', price.toFixed(4), 'at session time:', quote.t);
 
     // Add marker on chart
     if (onAddMarker) {
@@ -53,7 +55,7 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
         position: 'belowBar',
         color: '#089981',
         shape: 'arrowUp',
-        //text: `Buy ${positionSize} @ ${price.toFixed(2)}`
+        text: `+${positionSize}`
       });
     }
   };
@@ -61,17 +63,18 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
   const handleSell = () => {
     if (!quote) return;
     const price = quote.bid;
-    sell(positionSize, price);
-    console.log('🔴 SELL executed:', positionSize, '@', price.toFixed(4));
+    const trade = sell(positionSize, price, quote.t); // Pass session time
+    console.log('🔴 SELL executed:', positionSize, '@', price.toFixed(4), 'at session time:', quote.t);
 
-    // Add marker on chart
+    // Add marker on chart with P&L if position was closed
     if (onAddMarker) {
+      const plText = trade.realizedPL !== 0 ? ` (${trade.realizedPL >= 0 ? '+' : ''}$${trade.realizedPL.toFixed(2)})` : '';
       onAddMarker({
         time: quote.t,
         position: 'aboveBar',
         color: '#F23645',
         shape: 'arrowDown',
-        text: `Sell ${positionSize} @ ${price.toFixed(2)}`
+        text: `-${positionSize}${plText}`
       });
     }
   };
@@ -424,8 +427,8 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
                 </thead>
                 <tbody>
                   {trades.slice().reverse().map((trade, idx) => {
-                    // Format time in EST
-                    const tradeTime = new Date(trade.timestamp);
+                    // Format time in EST (timestamp is Unix seconds)
+                    const tradeTime = new Date(trade.timestamp * 1000);
                     const timeStr = tradeTime.toLocaleString('en-US', {
                       timeZone: 'America/New_York',
                       hour: '2-digit',
@@ -454,8 +457,52 @@ export default function OrderBookPanel({ sessionData, onAddMarker, onPositionCha
         </div>
       </div>
 
-      {/* Trading Controls - Single Line */}
+      {/* Trading Controls */}
       <div className="flex-shrink-0 bg-[#1E222D] px-4 py-2.5 border-t border-[#2A2E39]">
+        {/* SL/TP Row */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-red-400 font-semibold w-6">SL</span>
+              <input
+                type="number"
+                value={slInput}
+                onChange={(e) => {
+                  setSlInput(e.target.value);
+                  setStopLoss(e.target.value);
+                }}
+                placeholder="Stop Loss"
+                className="w-full bg-[#131722] border border-red-900/50 rounded px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-red-500"
+                step="0.01"
+              />
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-green-400 font-semibold w-6">TP</span>
+              <input
+                type="number"
+                value={tpInput}
+                onChange={(e) => {
+                  setTpInput(e.target.value);
+                  setTakeProfit(e.target.value);
+                }}
+                placeholder="Take Profit"
+                className="w-full bg-[#131722] border border-green-900/50 rounded px-2 py-1 text-white text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
+                step="0.01"
+              />
+            </div>
+          </div>
+          {(stopLoss || takeProfit) && quote && (
+            <div className="text-[10px] text-[#787B86]">
+              {stopLoss && <span className="text-red-400">SL: {((quote.bid - stopLoss) * summary.totalPosition).toFixed(2)}</span>}
+              {stopLoss && takeProfit && ' | '}
+              {takeProfit && <span className="text-green-400">TP: {((takeProfit - quote.ask) * summary.totalPosition).toFixed(2)}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Position Size and Buy/Sell */}
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <input

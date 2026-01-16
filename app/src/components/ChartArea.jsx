@@ -11,7 +11,7 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
   const lastQuoteCountRef = useRef(0);
   const markersRef = useRef([]);
   const markerSeriesRef = useRef(null);
-  const priceLineRefs = useRef({ bid: null, ask: null });
+  const priceLineRefs = useRef({ bid: null, ask: null, stopLoss: null, takeProfit: null, entry: null });
 
   const allTicksData = useRef([]);
   const aggregatedLineData = useRef({ bid: [], ask: [], mid: [] });
@@ -157,6 +157,36 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
       lineStyle: 0,
       axisLabelVisible: true,
       title: 'Ask',
+    });
+
+    // Entry price line (gold dashed)
+    priceLineRefs.current.entry = seriesRefs.current.mid.createPriceLine({
+      price: 0,
+      color: '#FFD700',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      axisLabelVisible: true,
+      title: 'Entry',
+    });
+
+    // Stop loss price line (red dashed)
+    priceLineRefs.current.stopLoss = seriesRefs.current.mid.createPriceLine({
+      price: 0,
+      color: '#FF4444',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      axisLabelVisible: true,
+      title: 'SL',
+    });
+
+    // Take profit price line (green dashed)
+    priceLineRefs.current.takeProfit = seriesRefs.current.mid.createPriceLine({
+      price: 0,
+      color: '#44FF44',
+      lineWidth: 2,
+      lineStyle: 2, // Dashed
+      axisLabelVisible: true,
+      title: 'TP',
     });
 
     seriesRefs.current.candlestick = chart.addSeries(CandlestickSeries, {
@@ -671,27 +701,60 @@ const ChartArea = forwardRef(({ sessionData, isLoading, chartType, timeframe, pr
     }
   }, [sessionData.quote, timeframe]);
 
-  // Update position average price line
+  // Update position price lines (entry, SL, TP)
   useEffect(() => {
-    if (!seriesRefs.current.positionAvg || !aggregatedLineData.current.mid.length) return;
+    if (!priceLineRefs.current.entry) return;
 
-    if (positionSummary && positionSummary.totalPosition !== 0 && positionSummary.avgPrice > 0) {
-      // Create a horizontal line at the average price across the entire chart
-      const firstTime = aggregatedLineData.current.mid[0]?.time;
-      const lastTime = aggregatedLineData.current.mid[aggregatedLineData.current.mid.length - 1]?.time;
-      
-      if (firstTime && lastTime) {
-        const positionLine = [
-          { time: firstTime, value: positionSummary.avgPrice },
-          { time: lastTime, value: positionSummary.avgPrice }
-        ];
-        seriesRefs.current.positionAvg.setData(positionLine);
-      }
+    const hasPosition = positionSummary && positionSummary.totalPosition !== 0;
+
+    // Update entry price line
+    if (hasPosition && positionSummary.avgPrice > 0) {
+      priceLineRefs.current.entry.applyOptions({
+        price: positionSummary.avgPrice,
+        lineWidth: 2,
+      });
     } else {
-      // Clear the line when no position
-      seriesRefs.current.positionAvg.setData([]);
+      priceLineRefs.current.entry.applyOptions({ price: 0 });
     }
-  }, [positionSummary, aggregatedLineData.current.mid.length, sessionData.quote]);
+
+    // Update stop loss line
+    if (hasPosition && positionSummary.stopLoss) {
+      priceLineRefs.current.stopLoss.applyOptions({
+        price: positionSummary.stopLoss,
+        lineWidth: 2,
+      });
+    } else {
+      priceLineRefs.current.stopLoss.applyOptions({ price: 0 });
+    }
+
+    // Update take profit line
+    if (hasPosition && positionSummary.takeProfit) {
+      priceLineRefs.current.takeProfit.applyOptions({
+        price: positionSummary.takeProfit,
+        lineWidth: 2,
+      });
+    } else {
+      priceLineRefs.current.takeProfit.applyOptions({ price: 0 });
+    }
+
+    // Also update the positionAvg series for visual reference
+    if (seriesRefs.current.positionAvg && aggregatedLineData.current.mid.length) {
+      if (hasPosition && positionSummary.avgPrice > 0) {
+        const firstTime = aggregatedLineData.current.mid[0]?.time;
+        const lastTime = aggregatedLineData.current.mid[aggregatedLineData.current.mid.length - 1]?.time;
+
+        if (firstTime && lastTime) {
+          const positionLine = [
+            { time: firstTime, value: positionSummary.avgPrice },
+            { time: lastTime, value: positionSummary.avgPrice }
+          ];
+          seriesRefs.current.positionAvg.setData(positionLine);
+        }
+      } else {
+        seriesRefs.current.positionAvg.setData([]);
+      }
+    }
+  }, [positionSummary, sessionData.quote]);
 
   return (
     <div className="relative w-full h-full bg-[#131722]">

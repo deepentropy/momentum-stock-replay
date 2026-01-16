@@ -10,6 +10,8 @@ export function usePositionManager() {
     realizedPL: 0,
     plPerShare: 0
   });
+  const [stopLoss, setStopLossState] = useState(null);
+  const [takeProfit, setTakeProfitState] = useState(null);
 
   const currentPriceRef = useRef(null);
 
@@ -61,8 +63,9 @@ export function usePositionManager() {
     });
   }, []);
 
-  const executeTrade = useCallback((side, quantity, price) => {
-    const timestamp = new Date().toISOString();
+  const executeTrade = useCallback((side, quantity, price, sessionTime = null) => {
+    // Use session time (Unix timestamp in seconds) if provided, otherwise fall back to wall clock
+    const timestamp = sessionTime || Math.floor(Date.now() / 1000);
     const tradeId = `${timestamp}-${Math.random().toString(36).substr(2, 9)}`;
 
     const newTrade = {
@@ -136,13 +139,21 @@ export function usePositionManager() {
     return newTrade;
   }, [trades, calculateSummary]);
 
-  const buy = useCallback((quantity, price) => {
-    return executeTrade('buy', quantity, price);
+  const buy = useCallback((quantity, price, sessionTime = null) => {
+    return executeTrade('buy', quantity, price, sessionTime);
   }, [executeTrade]);
 
-  const sell = useCallback((quantity, price) => {
-    return executeTrade('sell', quantity, price);
+  const sell = useCallback((quantity, price, sessionTime = null) => {
+    return executeTrade('sell', quantity, price, sessionTime);
   }, [executeTrade]);
+
+  const setStopLoss = useCallback((price) => {
+    setStopLossState(price ? parseFloat(price) : null);
+  }, []);
+
+  const setTakeProfit = useCallback((price) => {
+    setTakeProfitState(price ? parseFloat(price) : null);
+  }, []);
 
   const reset = useCallback(() => {
     setPositions([]);
@@ -154,6 +165,8 @@ export function usePositionManager() {
       realizedPL: 0,
       plPerShare: 0
     });
+    setStopLossState(null);
+    setTakeProfitState(null);
     currentPriceRef.current = null;
   }, []);
 
@@ -161,9 +174,13 @@ export function usePositionManager() {
     positions,
     trades,
     summary,
+    stopLoss,
+    takeProfit,
     buy,
     sell,
     reset,
-    updateCurrentPrice
+    updateCurrentPrice,
+    setStopLoss,
+    setTakeProfit
   };
 }
